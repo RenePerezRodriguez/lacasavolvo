@@ -254,4 +254,72 @@ class DashboardTest extends TestCase
             ->assertStatus(200)
             ->assertJson(['abierta' => false, 'saldo' => 0]);
     }
+
+    // ═══════════════ D11 · Inicio para TODOS los roles, acotado a la sucursal (2026-06-17) ═══════════════
+
+    /**
+     * El INICIO es para todos: un VENDEDOR (sin 'estadisticas.index') SÍ ve los paneles
+     * del inicio vía /dashboard/* (200), a diferencia del módulo /estadisticas (ADMIN/GERENTE).
+     * Decisión de producto: el dashboard de inicio lo ve cualquier rol, solo de SU sucursal.
+     */
+    public function test_vendedor_si_ve_el_inicio_dashboard(): void
+    {
+        $this->actingAsUser('VENDEDOR'); // sucursal 1
+        $hoy = now()->toDateString();
+        $hace12m = now()->subYear()->toDateString();
+
+        $this->getJson("/api/dashboard/ventas-periodo?vpDesde={$hace12m}&vpHasta={$hoy}&vpGran=month")
+            ->assertStatus(200);
+        $this->getJson("/api/dashboard/top-productos?tpDesde={$hace12m}&tpHasta={$hoy}&tpMet=unidades&take=5")
+            ->assertStatus(200)->assertJsonStructure(['total', 'data']);
+    }
+
+    /**
+     * El inicio SIEMPRE se acota a la sucursal pedida (nunca global): una venta de la
+     * sucursal 2 NO debe filtrarse al inicio de la sucursal 1, ni siquiera para un ADMIN.
+     */
+    public function test_inicio_acotado_a_la_sucursal_y_nunca_global(): void
+    {
+        $this->actingAsUser('ADMIN'); // ADMIN puede mirar cualquier sucursal, pero SIEMPRE acotado
+        $hoy = now()->toDateString();
+        $hace12m = now()->subYear()->toDateString();
+        $url   = fn ($sid) => "/api/dashboard/ventas-periodo?vpDesde={$hace12m}&vpHasta={$hoy}&vpGran=month&sucursal={$sid}";
+        $sumOf = fn ($rows) => array_sum(array_map(fn ($r) => (float) $r['total'], $rows));
+
+        $base1 = $sumOf($this->getJson($url(1))->assertStatus(200)->json());
+
+        $cuenta = Cuenta::factory()->cliente()->create();
+        Venta::factory()->create([
+            'sucursal_id' => 2, 'cuenta_id' => $cuenta->id, 'estado' => 'VALIDO',
+            'tipo' => 'CONTADO', 'fecha' => $hoy, 'total' => 77777,
+        ]);
+
+        // Sucursal 1 NO cambia (la venta es de la 2) → no hay fuga ni vista global.
+        $this->assertEqualsWithDelta($base1, $sumOf($this->getJson($url(1))->json()), 0.01,
+            'la venta de la sucursal 2 no debe filtrarse al inicio de la sucursal 1');
+        // Sucursal 2 SÍ la incluye.
+        $this->assertGreaterThanOrEqual(77777, $sumOf($this->getJson($url(2))->json()),
+            'el inicio de la sucursal 2 debe incluir su propia venta');
+    }
+
+    /**
+     * IDOR del inicio: un VENDEDOR de la sucursal 1 NO puede pedir el inicio de la
+     * sucursal 2 (sin acceso) → 403, igual que en los demás módulos.
+     */
+    public function test_inicio_403_si_pide_sucursal_sin_acceso(): void
+    {
+        $this->actingAsUser('VENDEDOR'); // sucursal 1, acceso solo a 1
+        $this->getJson('/api/dashboard/ventas-periodo?sucursal=2')->assertStatus(403);
+        $this->getJson('/api/dashboard/top-productos?sucursal=2&tpMet=unidades&take=5')->assertStatus(403);
+    }
+
+    /**
+     * El inicio respeta el rol EFECTIVO: un ADMIN que SIMULA VENDEDOR pierde el bypass de
+     * admin también en el inicio → no puede pedir una sucursal ajena (2) → 403.
+     */
+    public function test_inicio_admin_simulando_vendedor_respeta_frontera_de_sucursal(): void
+    {
+        $this->actingAsSimulating('VENDEDOR'); // acceso real solo a sucursal 1
+        $this->getJson('/api/dashboard/ventas-periodo?sucursal=2')->assertStatus(403);
+    }
 }

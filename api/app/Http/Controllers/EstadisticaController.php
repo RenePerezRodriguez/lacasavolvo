@@ -153,6 +153,80 @@ class EstadisticaController extends Controller
         return response()->json(['total' => $total, 'data' => $data]);
     }
 
+    // ── Dashboard (pantalla de inicio) ─────────────────────────────────────────
+    // El INICIO es para TODOS los roles (decisión de producto 2026-06-17), a diferencia
+    // del módulo Estadísticas (ADMIN/GERENTE). Por eso estos gemelos NO llaman a
+    // autorizarEstadisticas() y SIEMPRE acotan a la sucursal ACTIVA del usuario (nunca
+    // global): el inicio refleja la sucursal del selector de arriba.
+
+    /**
+     * Ventas por período para el inicio — siempre acotado a la sucursal activa.
+     * Mismo shape que ventasPeriodo(), pero accesible a cualquier rol autenticado.
+     */
+    public function dashboardVentasPeriodo(Request $request)
+    {
+        $sid = $this->sucursalActivaDashboard($request);
+        $desde = $request->get('vpDesde', now()->subMonth()->toDateString());
+        $hasta = $request->get('vpHasta', now()->toDateString());
+        $gran = $request->get('vpGran', 'month');
+        if (!in_array($gran, ['day', 'week', 'month'])) $gran = 'month';
+
+        $label = match ($gran) { 'week' => "DATE_FORMAT(fecha,'%x-W%v')", 'month' => "DATE_FORMAT(fecha,'%Y-%m')", default => "DATE(fecha)" };
+        return response()->json(
+            DB::table('ventas')->where('estado', 'VALIDO')->whereBetween('fecha', [$desde, $hasta])
+                ->where('sucursal_id', $sid)
+                ->select(DB::raw("{$label} as dia"), DB::raw('COUNT(*) as ventas'), DB::raw('SUM(total) as total'))
+                ->groupBy(DB::raw($label))->orderBy('dia')->get()
+        );
+    }
+
+    /**
+     * Top productos para el inicio — siempre acotado a la sucursal activa.
+     * Mismo shape que topProductos(), pero accesible a cualquier rol autenticado.
+     */
+    public function dashboardTopProductos(Request $request)
+    {
+        $sid = $this->sucursalActivaDashboard($request);
+        $desde = $request->get('tpDesde', now()->subMonth()->toDateString());
+        $hasta = $request->get('tpHasta', now()->toDateString());
+        $metrica = $request->get('tpMet', 'unidades');
+        [$take, $skip] = $this->paginacion($request);
+        $orderCol = $metrica === 'monto' ? 'total_monto' : 'total_vendido';
+
+        $q = DB::table('ventadetalles')->join('ventas', 'ventas.id', '=', 'ventadetalles.venta_id')->join('productos', 'productos.id', '=', 'ventadetalles.producto_id')
+            ->leftJoin('marcas', 'productos.marca_id', '=', 'marcas.id')
+            ->where('ventas.estado', 'VALIDO')->where('ventadetalles.estado', 'VALIDO')->whereBetween('ventas.fecha', [$desde, $hasta])
+            ->where('ventas.sucursal_id', $sid)
+            ->select('productos.codigo', 'productos.descripcion', DB::raw("COALESCE(marcas.nombre, '-') as marca"), DB::raw('SUM(ventadetalles.cantidad) as total_vendido'), DB::raw('SUM(ventadetalles.cantidad * ventadetalles.costo) as total_monto'))
+            ->groupBy('productos.id', 'productos.codigo', 'productos.descripcion', DB::raw("COALESCE(marcas.nombre, '-')"));
+
+        $total = $q->getCountForPagination();
+        $data = (clone $q)->orderByDesc($orderCol)->skip($skip)->take($take)->get();
+        return response()->json(['total' => $total, 'data' => $data]);
+    }
+
+    /**
+     * Sucursal activa para el inicio. SIEMPRE > 0 (nunca global). Cualquier rol puede
+     * verla, pero un no-ADMIN solo una sucursal a la que tenga acceso (se valida contra
+     * `accesos`); ADMIN puede mirar cualquiera. Default: la sucursal activa del usuario.
+     */
+    private function sucursalActivaDashboard(Request $request): int
+    {
+        $sid = (int) $request->get('sucursal', 0);
+        if ($sid <= 0) $sid = (int) Auth::user()->sucursal_id;
+        if ($sid > 0 && !Auth::user()->effectiveRoleIs('ADMIN')) {
+            $tieneAcceso = DB::table('accesos')
+                ->where('user_id', Auth::id())
+                ->where('sucursal_id', $sid)
+                ->where('estado', 'ON')
+                ->exists();
+            if (!$tieneAcceso) {
+                abort(403, 'No tiene acceso a la sucursal solicitada.');
+            }
+        }
+        return max(1, $sid);
+    }
+
     public function topClientes(Request $request)
     {
         $this->autorizarEstadisticas();

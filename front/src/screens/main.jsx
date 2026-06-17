@@ -212,7 +212,7 @@ function labelDia(dia) {
  * @param {object} props.user - Objeto usuario con sucursal_id y name.
  * @returns {JSX.Element}
  */
-export function Dashboard({ onNav, user, effectivePermissions, isAdmin = false }) {
+export function Dashboard({ onNav, user, effectivePermissions }) {
   const hora = new Date().getHours();
   const saludo = hora < 12 ? "Buenos días" : hora < 19 ? "Buenas tardes" : "Buenas noches";
   const nombre = user?.name?.split(" ")[0] ?? "...";
@@ -235,16 +235,15 @@ export function Dashboard({ onNav, user, effectivePermissions, isAdmin = false }
     const hace12m     = new Date(Date.now() - 365*24*60*60*1000).toISOString().slice(0, 10);
     const desdePeriodo = new Date(Date.now() - period*24*60*60*1000).toISOString().slice(0, 10);
     setLoading(true);
-    // Solo ADMIN/GERENTE (o rol con 'estadisticas.index') puede leer estadísticas.
-    // Espeja la regla de autorizarEstadisticas() del backend y respeta la simulación de roles.
-    // Se usan placeholders Promise.resolve(null) para NO correr los índices del destructuring.
-    const puedeVerStats = isAdmin || (effectivePermissions || []).includes('estadisticas.index');
+    // El INICIO es para TODOS los roles, acotado a la sucursal ACTIVA del usuario
+    // (decisión de producto 2026-06-17). Usa /dashboard/* — SIN el candado ADMIN/GERENTE
+    // de /estadisticas (ese candado sigue aplicando al módulo Estadísticas dedicado).
     const apiCalls = [
       ventasApi.kpis({ fecha_desde: desdePeriodo, fecha_hasta: hoy }),
       cajaApi.kpis(),
       cajaApi.movimientos({ fecha_desde: hoy, fecha_hasta: hoy }),
-      puedeVerStats ? estadApi.ventasPeriodo({ vpDesde: hace12m, vpHasta: hoy, vpGran: 'month' }) : Promise.resolve(null),
-      puedeVerStats ? estadApi.topProductos({ tpDesde: hace12m, tpHasta: hoy, tpMet: 'unidades', take: 5 }) : Promise.resolve(null),
+      estadApi.dashVentasPeriodo({ vpDesde: hace12m, vpHasta: hoy, vpGran: 'month', sucursal: user?.sucursal_id }),
+      estadApi.dashTopProductos({ tpDesde: hace12m, tpHasta: hoy, tpMet: 'unidades', take: 5, sucursal: user?.sucursal_id }),
       ventasApi.list({ pagado_filtro: 'POR PAGAR', estado_filtro: 'VALIDO', skip: 0, take: 5 }),
       comprasApi.list({ pagado_filtro: 'POR PAGAR',  estado_filtro: 'VALIDO', skip: 0, take: 5 }),
     ];
