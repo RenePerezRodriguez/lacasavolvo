@@ -57,7 +57,7 @@ export function Productos({ onNav, sucursalId, user, effectivePermissions }) {
         // Colores uniformes (observación de QA): > 0 negro, = 0 rojo. Sin escalón naranja
         // intermedio — había saldos > 0 que salían en rojo y confundían. El umbral "stock
         // bajo (≤5)" sigue vivo como KPI y filtro, pero no tiñe las cantidades por sucursal.
-        const tone = (s) => s === 0 ? "var(--danger)" : "var(--ink)";
+        const tone = (s) => s <= 0 ? "var(--danger)" : "var(--ink)";
         if (sucursalId === 1 && p.stocks && p.stocks.length > 1) {
           return (
             <div style={{display:"flex", gap:4, justifyContent:"center", flexWrap:"wrap"}}>
@@ -174,7 +174,7 @@ export function Productos({ onNav, sucursalId, user, effectivePermissions }) {
         ) : (
           <div style={{padding: 14, display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(230px, 1fr))", gap: 12}}>
             {filtered.map(p => (
-              <div key={p.id} onClick={() => onNav({ name: 'producto-detail', id: p.id, pData: p })}
+              <div key={p.id} onClick={() => { if (window.getSelection && String(window.getSelection()).length > 0) return; onNav({ name: 'producto-detail', id: p.id, pData: p }); }}
                 onMouseEnter={(e)=>{e.currentTarget.style.borderColor="var(--accent)"; e.currentTarget.style.boxShadow="var(--sh-md)";}}
                 onMouseLeave={(e)=>{e.currentTarget.style.borderColor="var(--line)"; e.currentTarget.style.boxShadow="";}}
                 style={{border:"1px solid var(--line)", borderRadius:"var(--r-md)", background:"var(--surface)", cursor:"pointer",
@@ -359,7 +359,7 @@ export function ProductoDetail({ productoId, productoData, onNav, user, effectiv
                 {p.stocks.map(s => (
                   <div key={s.id} style={{background:"var(--alt)", border:"1px solid var(--line)", borderRadius:"var(--r-md)", padding:"8px 14px", textAlign:"center", minWidth:64}}>
                     <span style={{fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".06em", color:"var(--soft)", display:"block"}}>{s.alias}</span>
-                    <span style={{fontSize:18, fontWeight:800, color:s.stock === 0 ? "var(--danger)" : "var(--ink)", fontVariantNumeric:"tabular-nums"}}>{s.stock}</span>
+                    <span style={{fontSize:18, fontWeight:800, color:s.stock <= 0 ? "var(--danger)" : "var(--ink)", fontVariantNumeric:"tabular-nums"}}>{s.stock}</span>
                   </div>
                 ))}
               </div>
