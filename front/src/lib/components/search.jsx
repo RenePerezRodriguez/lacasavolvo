@@ -47,6 +47,24 @@ export function SearchModal({ onClose, onNav, onProductClick, effectivePermissio
     return () => clearTimeout(timerRef.current);
   }, [q]);
 
+  // Ancho de ventana → layout responsivo del buscador. En pantallas chicas las 4 columnas
+  // (id/código · descripción · stock · precio) no entran y se solapaban (QA); en `compact`
+  // cada resultado se apila en tarjeta. Desktop usa un modal más ancho.
+  const [vw, setVw] = useState(typeof window !== "undefined" ? window.innerWidth : 1200);
+  useEffect(() => {
+    const onResize = () => setVw(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const compact = vw < 760;
+
+  // Abre el producto SOLO si no hay texto seleccionado: así se puede seleccionar/copiar la
+  // descripción (y demás) sin que el clic dispare la navegación (mismo criterio que la tabla).
+  const openIfNoSelection = (p) => {
+    if (typeof window !== "undefined" && window.getSelection && String(window.getSelection()).length > 0) return;
+    onClose(); onProductClick(p);
+  };
+
   const quickActions = [
     { label: "Nueva venta",      icon: "fa-cart-shopping",  route: "venta-nueva",   action: () => { onClose(); onNav("venta-nueva"); } },
     { label: "Nueva cotización", icon: "fa-file-invoice",   route: "cotizaciones",  action: () => { onClose(); onNav("cotizaciones"); } },
@@ -56,7 +74,9 @@ export function SearchModal({ onClose, onNav, onProductClick, effectivePermissio
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      {/* Modal ancho en desktop (las 4 columnas necesitan aire); en ≤600px el CSS lo hace
+          full-screen. maxWidth solo aplica fuera de mobile. */}
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={compact ? undefined : {maxWidth: 880}}>
         <div style={{padding: "12px 16px", borderBottom: "1px solid var(--line)", display:"flex", alignItems:"center", gap: 10}}>
           <Icon name="fa-magnifying-glass" style={{color:"var(--soft)"}}/>
           <input
@@ -93,62 +113,90 @@ export function SearchModal({ onClose, onNav, onProductClick, effectivePermissio
           {!searching && results.length > 0 && (
             <>
               <div style={{padding: "12px 10px 4px", fontSize: 10, fontWeight:700, color:"var(--dust)", letterSpacing:".08em"}}>PRODUCTOS</div>
-              <div style={{display:"flex", alignItems:"center", gap:12, padding:"4px 12px", fontSize:9, fontWeight:700, color:"var(--dust)", letterSpacing:".06em", textTransform:"uppercase", borderBottom:"1px solid var(--line)"}}>
-                <span style={{minWidth:190, flexShrink:0, display:"flex", gap:8}}>
-                  <span style={{minWidth:32}}>ID</span>
-                  <span style={{minWidth:80}}>Código</span>
-                </span>
-                <span style={{flex:1, minWidth:0}}>Descripción / Marca</span>
-                <span style={{flexShrink:0, textAlign:"center", minWidth:140}}>Stock por sucursal</span>
-                <span style={{flexShrink:0, textAlign:"right", minWidth:92}}>Precio</span>
-              </div>
+              {/* Cabecera de columnas: solo en desktop. En compacto cada resultado es una tarjeta apilada. */}
+              {!compact && (
+                <div style={{display:"flex", alignItems:"center", gap:14, padding:"4px 12px", fontSize:9, fontWeight:700, color:"var(--dust)", letterSpacing:".06em", textTransform:"uppercase", borderBottom:"1px solid var(--line)"}}>
+                  <span style={{minWidth:170, flexShrink:0, display:"flex", gap:8}}>
+                    <span style={{minWidth:30}}>ID</span>
+                    <span style={{minWidth:80}}>Código</span>
+                  </span>
+                  <span style={{flex:1, minWidth:150}}>Descripción / Marca</span>
+                  <span style={{flexShrink:0, textAlign:"center", minWidth:150}}>Stock por sucursal</span>
+                  <span style={{flexShrink:0, textAlign:"right", minWidth:96}}>Precio</span>
+                </div>
+              )}
               {results.map((p) => {
                 const st = p.stock ?? 0;
                 const statusTone = st === 0 ? "danger" : st <= 5 ? "warning" : "success";
                 const statusLabel = st === 0 ? "Agotado" : st <= 5 ? "Stock bajo" : "Disponible";
                 const marcaNombre = typeof p.marca === "object" ? p.marca?.nombre : p.marca;
                 const porSucursal = Array.isArray(p.stocks) ? p.stocks : null;
-                return (
-                  <button key={p.id} onClick={() => { onClose(); onProductClick(p); }} style={{display:"flex", alignItems:"center", gap:12, padding:"10px 12px", width:"100%", textAlign:"left", borderRadius:"var(--r-md)"}}
+
+                // Piezas reutilizables en ambos layouts (desktop en fila / compacto apilado).
+                const idCodigo = (
+                  <span style={{display:"flex", alignItems:"center", gap:8, minWidth: compact ? 0 : 170, flexShrink:0}}>
+                    <span className="mono" style={{fontSize:10, color:"var(--soft)", fontWeight:500, minWidth:30}}>#{p.id}</span>
+                    {/* Código copiable (QA): copiar el código desde el buscador sin abrir el producto. */}
+                    <CopyableCode code={p.codigo} style={{minWidth:80}} codeStyle={{fontSize:11, color:"var(--accent)", background:"var(--accent-soft)", padding:"3px 7px", borderRadius:4, fontWeight:700}}/>
+                  </span>
+                );
+                const descripcion = (
+                  <span style={{flex:1, minWidth: compact ? 0 : 150, display:"flex", flexDirection:"column"}}>
+                    {/* Descripción SELECCIONABLE (QA): poder copiarla como en Productos. userSelect:text
+                        + el guard openIfNoSelection evitan que seleccionar dispare la navegación. */}
+                    <span style={{fontSize:13, fontWeight:600, color:"var(--body)", lineHeight:1.4, userSelect:"text", cursor:"text"}}>{p.descripcion}</span>
+                    <span style={{fontSize:10.5, color:"var(--soft)", fontWeight:600, letterSpacing:".04em", marginTop: 2, userSelect:"text"}}>{marcaNombre}</span>
+                  </span>
+                );
+                const stock = porSucursal && porSucursal.length > 0 ? (
+                  // Stock por sucursal (CTR/MTR/TRJ/…), colores uniformes (QA): > 0 negro, = 0 rojo.
+                  <span style={{display:"flex", alignItems:"flex-start", gap:7, flexShrink:0, minWidth: compact ? 0 : 150, justifyContent: compact ? "flex-start" : "center", flexWrap:"wrap"}}>
+                    {porSucursal.map((s) => (
+                      <span key={s.id} title={s.nombre || s.alias} style={{display:"flex", flexDirection:"column", alignItems:"center", minWidth:28}}>
+                        <span style={{fontSize:8.5, fontWeight:800, color:"var(--dust)", letterSpacing:".02em", textTransform:"uppercase"}}>{s.alias}</span>
+                        <span className="mono tabular" style={{fontSize:14, fontWeight:800, lineHeight:1.15, color: s.stock <= 0 ? "var(--danger)" : "var(--ink)"}}>{s.stock}</span>
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  <span style={{display:"flex", flexDirection:"column", alignItems: compact ? "flex-start" : "center", gap:3, flexShrink:0, minWidth: compact ? 0 : 150}}>
+                    <span className="mono tabular" style={{fontSize:14, fontWeight:800, color: st === 0 ? "var(--danger)" : "var(--ink)", lineHeight:1}}>{st}</span>
+                    <Badge tone={statusTone} dot>{statusLabel}</Badge>
+                  </span>
+                );
+                const precio = (
+                  // Precios de venta (QA): c/f = con factura (p_fact) · s/f = sin factura (p_norm). Costo NO.
+                  <span style={{display:"flex", flexDirection:"column", alignItems:"flex-end", flexShrink:0, lineHeight:1.25, minWidth: compact ? 0 : 96}}>
+                    <span className="mono" style={{fontSize:12.5, fontWeight:700, color:"var(--ink)", whiteSpace:"nowrap"}}>
+                      Bs {Number(p.p_fact ?? 0).toFixed(2)} <span style={{fontSize:8.5, color:"var(--soft)", fontWeight:700}}>c/f</span>
+                    </span>
+                    <span className="mono" style={{fontSize:11, fontWeight:600, color:"var(--soft)", whiteSpace:"nowrap"}}>
+                      Bs {Number(p.p_norm ?? 0).toFixed(2)} <span style={{fontSize:8.5, fontWeight:700}}>s/f</span>
+                    </span>
+                  </span>
+                );
+
+                return compact ? (
+                  // ── Compacto/mobile: tarjeta apilada (sin solapes) ──
+                  <button key={p.id} onClick={() => openIfNoSelection(p)} style={{display:"flex", flexDirection:"column", gap:7, padding:"12px", width:"100%", textAlign:"left", borderRadius:"var(--r-md)", borderBottom:"1px solid var(--line-soft)"}}
                     onMouseEnter={(e)=>e.currentTarget.style.background="var(--hover)"}
                     onMouseLeave={(e)=>e.currentTarget.style.background=""}>
-                    <span style={{display:"flex", alignItems:"center", gap:8, minWidth: 190, flexShrink:0}}>
-                      <span className="mono" style={{fontSize:10, color:"var(--soft)", fontWeight:500, minWidth:32}}>#{p.id}</span>
-                      {/* Código copiable (QA): copiar el código desde el buscador sin abrir el producto. */}
-                      <CopyableCode code={p.codigo} style={{minWidth:80}} codeStyle={{fontSize:11, color:"var(--accent)", background:"var(--accent-soft)", padding:"3px 7px", borderRadius:4, fontWeight:700}}/>
+                    <span style={{display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10, width:"100%"}}>
+                      {idCodigo}
+                      {precio}
                     </span>
-                    <span style={{flex:1, minWidth: 0, display:"flex", flexDirection:"column"}}>
-                      <span style={{fontSize:13, fontWeight:600, color:"var(--body)", lineHeight:1.4}}>{p.descripcion}</span>
-                      <span style={{fontSize:10.5, color:"var(--soft)", fontWeight:600, letterSpacing:".04em", marginTop: 2}}>{marcaNombre}</span>
-                    </span>
-                    {porSucursal && porSucursal.length > 0 ? (
-                      // Desglose de stock por sucursal (CTR/MTR/TRJ/… como el sistema viejo):
-                      // acceso rápido a las cantidades de TODAS las sucursales, no solo la actual.
-                      // Colores uniformes (QA): > 0 negro, = 0 rojo.
-                      <span style={{display:"flex", alignItems:"flex-start", gap:7, flexShrink:0, minWidth:140, justifyContent:"center"}}>
-                        {porSucursal.map((s) => (
-                          <span key={s.id} title={s.nombre || s.alias} style={{display:"flex", flexDirection:"column", alignItems:"center", minWidth:28}}>
-                            <span style={{fontSize:8.5, fontWeight:800, color:"var(--dust)", letterSpacing:".02em", textTransform:"uppercase"}}>{s.alias}</span>
-                            <span className="mono tabular" style={{fontSize:14, fontWeight:800, lineHeight:1.15, color: s.stock <= 0 ? "var(--danger)" : "var(--ink)"}}>{s.stock}</span>
-                          </span>
-                        ))}
-                      </span>
-                    ) : (
-                      <span style={{display:"flex", flexDirection:"column", alignItems:"center", gap:3, flexShrink:0, minWidth:140}}>
-                        <span className="mono tabular" style={{fontSize:14, fontWeight:800, color: st === 0 ? "var(--danger)" : "var(--ink)", lineHeight:1}}>{st}</span>
-                        <Badge tone={statusTone} dot>{statusLabel}</Badge>
-                      </span>
-                    )}
-                    {/* Precios de venta (QA: el buscador no los mostraba, había que abrir el producto).
-                        c/f = con factura (p_fact) · s/f = sin factura (p_norm). El costo NO se muestra. */}
-                    <span style={{display:"flex", flexDirection:"column", alignItems:"flex-end", flexShrink:0, lineHeight:1.25, minWidth:92}}>
-                      <span className="mono" style={{fontSize:12.5, fontWeight:700, color:"var(--ink)", whiteSpace:"nowrap"}}>
-                        Bs {Number(p.p_fact ?? 0).toFixed(2)} <span style={{fontSize:8.5, color:"var(--soft)", fontWeight:700}}>c/f</span>
-                      </span>
-                      <span className="mono" style={{fontSize:11, fontWeight:600, color:"var(--soft)", whiteSpace:"nowrap"}}>
-                        Bs {Number(p.p_norm ?? 0).toFixed(2)} <span style={{fontSize:8.5, fontWeight:700}}>s/f</span>
-                      </span>
-                    </span>
+                    {descripcion}
+                    {stock}
+                  </button>
+                ) : (
+                  // ── Desktop: 4 columnas, alineadas arriba para descripciones de varias líneas ──
+                  <button key={p.id} onClick={() => openIfNoSelection(p)} style={{display:"flex", alignItems:"flex-start", gap:14, padding:"10px 12px", width:"100%", textAlign:"left", borderRadius:"var(--r-md)"}}
+                    onMouseEnter={(e)=>e.currentTarget.style.background="var(--hover)"}
+                    onMouseLeave={(e)=>e.currentTarget.style.background=""}>
+                    {idCodigo}
+                    {descripcion}
+                    {stock}
+                    {precio}
                   </button>
                 );
               })}
