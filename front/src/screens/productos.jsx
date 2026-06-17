@@ -28,6 +28,10 @@ export function Productos({ onNav, sucursalId, user, effectivePermissions }) {
   const [sort, setSort]             = useState({ col: 'id', dir: 'desc' });
   const { hiddenCols, toggleCol, visibleCols, showCols, setShowCols } = useColumnVisibility('productos', ['industria']);
   const canCreate = (effectivePermissions || []).some(p => p === 'productos.create');
+  // "Ajustar stock" navega a la ruta `ajustes`, que exige `productos.ajustes`. Hay que
+  // gatear el botón con ESE permiso (no con productos.create): un vendedor sin ajustes
+  // hacía clic y el guard de ruta lo rebotaba al inicio (bug reportado).
+  const canAdjust = (effectivePermissions || []).some(p => p === 'productos.ajustes');
   const effectiveRole = user?.simulated_role_name || user?.role;
   const showCosto = ['ADMIN', 'GERENTE'].includes(effectiveRole);
 
@@ -96,7 +100,7 @@ export function Productos({ onNav, sucursalId, user, effectivePermissions }) {
     <div className="fade-up stack" style={{"--gap":"24px"}}>
       <PageHead title="Productos" sub="Catálogo, stock de tu sucursal y precios"
         actions={<>
-          {canCreate && <Button variant="secondary" icon="fa-balance-scale" size="sm" onClick={() => onNav("ajustes")}>Ajustar stock</Button>}
+          {canAdjust && <Button variant="secondary" icon="fa-balance-scale" size="sm" onClick={() => onNav("ajustes")}>Ajustar stock</Button>}
           {canCreate && <Button variant="accent" icon="fa-plus" size="sm" onClick={() => { setEditing(null); setFormOpen(true); }}>Nuevo producto</Button>}
         </>}
       />
@@ -256,6 +260,9 @@ export function ProductoDetail({ productoId, productoData, onNav, user, effectiv
   const [p, setP]                     = useState(productoData ?? null);
   const [formOpen, setFormOpen]       = useState(false);
   const canCreate = (effectivePermissions || []).includes('productos.create');
+  // "Ajustar stock" navega a `ajustes` (exige productos.ajustes). Sin este gate, un vendedor
+  // hacía clic y el guard de ruta lo mandaba al inicio (bug reportado).
+  const canAdjust = (effectivePermissions || []).includes('productos.ajustes');
 
   useEffect(() => {
     setLoading(true);
@@ -276,7 +283,7 @@ export function ProductoDetail({ productoId, productoData, onNav, user, effectiv
         sub={p ? `#${p.id} · ${p.codigo} · ${p.marca}` : ''}
         actions={<>
           <Button variant="ghost" icon="fa-arrow-left" size="sm" onClick={()=>onNav('productos')}>Volver</Button>
-          <Button variant="secondary" icon="fa-balance-scale" size="sm" onClick={()=>onNav('ajustes')}>Ajustar stock</Button>
+          {canAdjust && <Button variant="secondary" icon="fa-balance-scale" size="sm" onClick={()=>onNav('ajustes')}>Ajustar stock</Button>}
           {canCreate && <Button variant="secondary" icon="fa-pen" size="sm" onClick={() => setFormOpen(true)}>Editar</Button>}
         </>}
       />
