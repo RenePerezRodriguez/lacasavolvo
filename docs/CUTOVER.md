@@ -1,5 +1,45 @@
 # Runbook de puesta en producción (cutover)
 
+> ## ✅ EJECUTADO — 2026-06-17 · producción EN VIVO
+>
+> `lacasavolvo.com` ya sirve el **sistema nuevo** (SPA React → `api.lacasavolvo.com` → BD `lacasavo_prod`).
+> `tienda` quedó **intacta**. Lo de más abajo es el plan original; esto es lo que **realmente** se hizo.
+>
+> ### Método real
+> En este hosting **no hay SSH** (firewall) y `shell_exec` está deshabilitado, así que **todo se hizo por el
+> API token de cPanel** (UAPI sobre HTTPS `:2083`) + scripts PHP temporales subidos con `Fileman/save_file_content`,
+> corridos por URL (protegidos por `?key=` y autoeliminados). La copia de BD fue **PDO puro** (no `mysqldump`).
+>
+> ### Pasos efectivos
+> 1. `lacasavo_prod` creada por API (`Mysql/create_database` + user + `ALL PRIVILEGES`).
+> 2. Copia `tienda` → `lacasavo_prod` (PDO, 57 tablas / ~423k filas, conteos verificados). **`tienda` solo se leyó.**
+> 3. Migraciones Shinobi→Spatie sobre `lacasavo_prod` (override de conexión en runtime; no se tocó el `.env` vivo).
+> 4. Repunte del `.env` del API → `lacasavo_prod` + limpieza de cachés (verificado en request fresco).
+> 5. Admin `rene@softlat.com` (ADMIN, 5 sucursales) creado en `lacasavo_prod`.
+> 6. Build del SPA + swap quirúrgico en `public_html` (legacy respaldado; subcarpetas `api.`/`staging.` preservadas).
+> 7. Verificación e2e: login real OK (92 permisos), assets HTTP 200.
+> 8. `staging` desconectado (página de mantenimiento; SPA guardada en `index.html.bak`).
+>
+> ### Arquitectura final (cPanel, cuenta `lacasavo`)
+> - `lacasavolvo.com` → `public_html/` → **SPA nueva**
+> - `api.lacasavolvo.com` → `public_html/api.lacasavolvo.com/public` → API Laravel 13 → **`lacasavo_prod`** (73 MB, copia compacta)
+> - `staging.lacasavolvo.com` → mantenimiento (pendiente: API propia)
+>
+> ### Backups / rollback
+> - **`tienda`**: intacta — la red de seguridad principal.
+> - Frontend legacy: `/home/lacasavo/cutover_backup/legacy_public_html_20260617_103052/`
+> - `.env` anterior del API: `api.lacasavolvo.com/.env.bak.20260617_102056`
+> - Código legacy (app): `/home/lacasavo/laravel/`
+> - **Rollback**: mover el legacy de `cutover_backup/` de vuelta a `public_html/` + restaurar el `.env.bak`. `tienda` sigue intacta.
+>
+> ### Pendiente
+> - Darle a `staging` su propia API (hoy desconectado).
+> - Retirar el legacy del todo en ~unas semanas (sin apuro).
+>
+> *Credenciales del deploy (token cPanel, FTP, BD prod): en `api/scripts/deploy/.deploy.env` (gitignored, **nunca** en git).*
+
+---
+
 Pasaje del **legacy** (Laravel 5.4 en `lacasavolvo.com`, BD `tienda`) al **sistema nuevo** (Laravel 13
 API + React SPA). Estrategia: **copiar `tienda` a una BD nueva (`lacasavo_prod`)** y correr el sistema
 nuevo ahí. La `tienda` real queda intacta → rollback trivial.
