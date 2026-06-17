@@ -240,7 +240,12 @@ class PedidoController extends Controller
 
         return response()->json(
             $pedido->detalles()->where('estado', 'VALIDO')->get()->map(fn($d) => [
+                // `id` = id de la LÍNEA (pedidodetalle), usado para update/delete del renglón.
+                // `producto_id` = id real del PRODUCTO: es el que el front debe MOSTRAR (#5504),
+                // no el de la línea (#29361). Sin esto el front caía al id de línea → confundía
+                // al usuario y no se podía buscar el producto (observación de QA).
                 'id'          => $d->id,
+                'producto_id' => $d->producto_id,
                 'codigo'      => $d->codigo,
                 'descripcion' => $d->descripcion,
                 'marca'       => $d->marca,

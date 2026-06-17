@@ -4,7 +4,7 @@
  * Todos los estilos dependen del design system en index.css (variables CSS globales).
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 
 /**
@@ -306,5 +306,106 @@ export function PdfButton({ onPdf, label = "PDF", iconOnly = false, variant = "s
     >
       {loading ? "Generando…" : label}
     </Button>
+  );
+}
+
+
+/**
+ * Código de producto copiable: texto monoespaciado seleccionable + ícono de "copiar".
+ * Frena la propagación de eventos (click/mousedown) para que, dentro de una fila navegable
+ * o un botón de resultado de búsqueda, copiar o seleccionar el código NO dispare la
+ * navegación ni la selección del producto. Observación de QA: el código era un enlace y
+ * no se podía copiar para pegarlo en el buscador. Solo usa <span> (sin <button> anidado)
+ * para ser válido dentro de un <button> padre (p. ej. el buscador rápido).
+ * @param {object} props
+ * @param {string|number} props.code - Código a mostrar y copiar.
+ * @param {object} [props.style] - Estilos extra del contenedor.
+ * @param {object} [props.codeStyle] - Estilos extra del texto del código.
+ * @param {string} [props.title="Copiar código"] - Tooltip del ícono.
+ * @returns {JSX.Element}
+ */
+export function CopyableCode({ code, style = {}, codeStyle = {}, title = "Copiar código" }) {
+  const [copied, setCopied] = useState(false);
+  const stop = (e) => { e.stopPropagation(); };
+  const copy = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const text = String(code ?? '');
+    const done = () => { setCopied(true); setTimeout(() => setCopied(false), 1100); };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(() => {});
+    } else {
+      // Fallback para contextos sin Clipboard API (permiso denegado / http): textarea temporal.
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+        document.body.removeChild(ta); done();
+      } catch { /* sin-op */ }
+    }
+  };
+  return (
+    <span onClick={stop} onMouseDown={stop} style={{display:"inline-flex", alignItems:"center", gap:5, ...style}}>
+      <span className="mono" style={{userSelect:"all", cursor:"text", ...codeStyle}}>{code}</span>
+      <span role="button" tabIndex={0} title={copied ? "¡Copiado!" : title}
+        onClick={copy} onMouseDown={stop}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') copy(e); }}
+        style={{display:"inline-flex", alignItems:"center", justifyContent:"center", width:18, height:18,
+          borderRadius:4, cursor:"pointer", color: copied ? "var(--success)" : "var(--soft)", flexShrink:0}}>
+        <Icon name={copied ? "fa-check" : "fa-copy"} style={{fontSize:10}}/>
+      </span>
+    </span>
+  );
+}
+
+
+/**
+ * Selector de cantidad: − [input editable] +. A diferencia del stepper anterior, el número
+ * se puede TECLEAR directamente (observación de QA: para cantidades grandes hacer clic N
+ * veces era inviable). Confirma con Enter o al perder el foco; acota a [min, max] y revierte
+ * si el texto es inválido. Mismo aspecto visual que el stepper que reemplaza (drop-in).
+ * @param {object} props
+ * @param {number} props.value - Cantidad actual.
+ * @param {function(number): void} props.onChange - Se llama con la nueva cantidad (absoluta) ya acotada.
+ * @param {number} [props.min=1] - Mínimo permitido.
+ * @param {number} [props.max=100000] - Máximo permitido (coincide con el cap del backend).
+ * @param {boolean} [props.disabled=false] - Deshabilita la edición.
+ * @returns {JSX.Element}
+ */
+export function QtyStepper({ value, onChange, min = 1, max = 100000, disabled = false }) {
+  const [draft, setDraft] = useState(String(value));
+  // Re-sincroniza el draft cuando el valor confirmado cambia desde afuera (reload tras guardar).
+  useEffect(() => { setDraft(String(value)); }, [value]);
+
+  const commit = () => {
+    let n = parseInt(draft, 10);
+    if (isNaN(n)) { setDraft(String(value)); return; }   // texto vacío/inválido → revertir
+    n = Math.max(min, Math.min(max, n));
+    setDraft(String(n));
+    if (n !== value) onChange(n);
+  };
+
+  const step = (delta) => {
+    if (disabled) return;
+    const n = Math.max(min, Math.min(max, value + delta));
+    if (n !== value) onChange(n);
+  };
+
+  return (
+    <div style={{display:"inline-flex", alignItems:"center", border:"1px solid var(--line)", borderRadius:"var(--r-md)", overflow:"hidden"}}>
+      <button type="button" onClick={() => step(-1)} disabled={disabled || value <= min}
+        title="Disminuir" style={{width:30, height:30, color:"var(--soft)"}}><Icon name="fa-minus" style={{fontSize:10}}/></button>
+      <input className="mono tabular" type="text" inputMode="numeric" value={draft} disabled={disabled}
+        aria-label="Cantidad"
+        onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ''))}
+        onFocus={(e) => e.target.select()}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
+        style={{width:48, height:30, textAlign:"center", fontWeight:700, color:"var(--ink)", fontSize:13,
+          border:"none", borderLeft:"1px solid var(--line)", borderRight:"1px solid var(--line)",
+          background:"transparent", outline:"none", padding:0}}/>
+      <button type="button" onClick={() => step(1)} disabled={disabled || value >= max}
+        title="Aumentar" style={{width:30, height:30, color:"var(--soft)"}}><Icon name="fa-plus" style={{fontSize:10}}/></button>
+    </div>
   );
 }

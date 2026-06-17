@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { useListData, useColumnVisibility } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
-import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput } from '../lib/components.jsx';
+import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper } from '../lib/components.jsx';
 import { EnvioFormModal, EnvioEncabezadoModal } from './forms.jsx';
 import { openPdf, envios as enviosApi } from '../services/api.js';
 
@@ -328,13 +328,9 @@ export function EnvioDetail({ envioId, envioData, onNav }) {
                         </div>
                       </td>
                       <td className="center">
-                        {editable ? (
-                          <div style={{display:"inline-flex",alignItems:"center",border:"1px solid var(--line)",borderRadius:"var(--r-md)",overflow:"hidden"}}>
-                            <button onClick={()=>updateCant(it,it.cantidad-1)} disabled={saving} style={{width:30,height:30,color:"var(--soft)"}}><Icon name="fa-minus" style={{fontSize:10}}/></button>
-                            <div className="mono tabular" style={{width:48,textAlign:"center",fontWeight:700,color:"var(--ink)",fontSize:13}}>{it.cantidad}</div>
-                            <button onClick={()=>updateCant(it,it.cantidad+1)} disabled={saving} style={{width:30,height:30,color:"var(--soft)"}}><Icon name="fa-plus" style={{fontSize:10}}/></button>
-                          </div>
-                        ) : <span className="mono tabular" style={{fontWeight:700}}>{it.cantidad}</span>}
+                        {editable
+                          ? <QtyStepper value={it.cantidad} onChange={(n)=>updateCant(it,n)} disabled={saving}/>
+                          : <span className="mono tabular" style={{fontWeight:700}}>{it.cantidad}</span>}
                       </td>
                       {editable && <td><button className="icon-btn danger" disabled={saving} onClick={()=>removeItem(it)}><Icon name="fa-trash" style={{fontSize:11}}/></button></td>}
                       {estado === 'RECIBIDO' && esDestino && (

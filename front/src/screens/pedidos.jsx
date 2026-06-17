@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useListData, useColumnVisibility } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
-import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput } from '../lib/components.jsx';
+import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, CopyableCode } from '../lib/components.jsx';
 import { PedidoFormModal } from './forms.jsx';
 import { openPdf, pedidos as pedidosApi } from '../services/api.js';
 
@@ -245,30 +245,29 @@ export function PedidoDetail({ pedidoId, pedidoData, onNav }) {
               <StatusBadge value={estado}/>
             </div>
             {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-clipboard-list"/> : (
+              // Detalle desglosado en columnas (ID · Código · Descripción · Marca) como en
+              // Productos — observación de QA: antes iba todo amontonado en una sola celda y
+              // el "ID" mostrado era el de la línea, no el del producto. El código es copiable.
               <table className="tbl">
                 <thead><tr>
-                  <th>Producto</th>
+                  <th style={{width:64}}>ID</th>
+                  <th style={{width:150}}>Código</th>
+                  <th>Descripción</th>
+                  <th style={{width:120}}>Marca</th>
                   <th className="center" style={{width:estado==='PROFORMA'?150:80}}>Cantidad</th>
                   {estado === 'PROFORMA' && <th style={{width:40}}></th>}
                 </tr></thead>
                 <tbody>
                   {detalles.map(it => (
                     <tr key={it.id}>
-                      <td>
-                        <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{it.descripcion}</div>
-                        <div className="row" style={{gap:6,marginTop:2}}>
-                          <span className="mono" style={{fontSize:10.5,color:"var(--soft)"}}>#{it.producto_id ?? it.id} · {it.codigo}</span>
-                          <span style={{fontSize:10.5,color:"var(--accent)",fontWeight:600}}>{it.marca}</span>
-                        </div>
-                      </td>
+                      <td><span className="mono" style={{fontSize:11,fontWeight:600,color:"var(--soft)"}}>#{it.producto_id ?? it.id}</span></td>
+                      <td><CopyableCode code={it.codigo} codeStyle={{fontSize:11,fontWeight:700,color:"var(--accent)"}}/></td>
+                      <td><span style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{it.descripcion}</span></td>
+                      <td><span style={{fontSize:11.5,color:"var(--accent)",fontWeight:600}}>{it.marca || '—'}</span></td>
                       <td className="center">
-                        {estado === 'PROFORMA' ? (
-                          <div style={{display:"inline-flex",alignItems:"center",border:"1px solid var(--line)",borderRadius:"var(--r-md)",overflow:"hidden"}}>
-                            <button onClick={()=>updateCant(it,it.cantidad-1)} disabled={saving} style={{width:30,height:30,color:"var(--soft)"}}><Icon name="fa-minus" style={{fontSize:10}}/></button>
-                            <div className="mono tabular" style={{width:48,textAlign:"center",fontWeight:700,color:"var(--ink)",fontSize:13}}>{it.cantidad}</div>
-                            <button onClick={()=>updateCant(it,it.cantidad+1)} disabled={saving} style={{width:30,height:30,color:"var(--soft)"}}><Icon name="fa-plus" style={{fontSize:10}}/></button>
-                          </div>
-                        ) : <span className="mono tabular" style={{fontWeight:700}}>{it.cantidad}</span>}
+                        {estado === 'PROFORMA'
+                          ? <QtyStepper value={it.cantidad} onChange={(n)=>updateCant(it,n)} disabled={saving}/>
+                          : <span className="mono tabular" style={{fontWeight:700}}>{it.cantidad}</span>}
                       </td>
                       {estado === 'PROFORMA' && <td><button className="icon-btn danger" disabled={saving} onClick={()=>removeItem(it)}><Icon name="fa-trash" style={{fontSize:11}}/></button></td>}
                     </tr>
