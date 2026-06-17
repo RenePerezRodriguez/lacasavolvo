@@ -107,7 +107,12 @@ export function Ajustes({ onNav, sucursalId, user, effectivePermissions }) {
   const [modalOpen, setModalOpen]   = useState(false);
   const [pageSize, setPageSize]     = useState(15);
   const { hiddenCols, toggleCol, visibleCols, showCols, setShowCols } = useColumnVisibility('ajustes', []);
-  const canCreate = (effectivePermissions || []).some(p => p === 'productos.ajuste-positivo' || p === 'productos.ajuste-negativo');
+  // El botón "Nuevo ajuste" se gatea con `productos.ajustes` — el MISMO permiso que abre
+  // esta pantalla (y que pide el backend en /productos/ajuste-*). Antes chequeaba
+  // 'productos.ajuste-positivo'/'-negativo' (con guion), permisos que NO existen
+  // (los reales son productos.ajustes / .ajustepositivo) → canCreate era SIEMPRE false
+  // y nadie, ni gerente ni admin, veía el botón (bug reportado).
+  const canCreate = (effectivePermissions || []).some(p => p === 'productos.ajustes');
 
   const { items: ajustes, total, loading, reload } = useListData(
     params => prodApi.ajustes(params), null,
