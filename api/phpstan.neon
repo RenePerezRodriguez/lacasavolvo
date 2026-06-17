@@ -1,0 +1,27 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+    paths:
+        - app
+    ignoreErrors:
+        # Eloquent: atributos/relaciones mágicas. La BD es legacy (tablas creadas fuera de
+        # migraciones, guardadas con Schema::hasTable), así que Larastan no puede inferir
+        # columnas. Es ruido de framework, no bugs. (Mejora futura: anotar @property en modelos.)
+        - identifier: property.notFound
+        - identifier: larastan.relationExistence
+        # Null-handling defensivo sobre relaciones (?->x ?? ''): inofensivo, no es señal.
+        - identifier: nullsafe.neverNull
+        - identifier: nullCoalesce.expr
+        - identifier: nullCoalesce.property
+        - identifier: booleanNot.alwaysFalse
+        # Closures ->map() sobre colecciones Eloquent: el tipo del item es "unresolvable"
+        # por las propiedades mágicas sin anotar (mismo origen que property.notFound).
+        # OJO: 'argument.type' SIGUE activo → los mismatches reales de tipo se siguen cazando.
+        - identifier: argument.unresolvableType
+        # Covarianza de templates de Collection en el offset 'stocks' (tecnicismo, no bug).
+        - message: '#Anonymous function should return array.*but returns array#'
+        # Opinión de performance: ->get()->count() es deliberado donde GROUP BY rompe getCountForPagination.
+        - identifier: larastan.noUnnecessaryCollectionCall
+    reportUnmatchedIgnoredErrors: false

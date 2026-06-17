@@ -1,0 +1,79 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'api/**'
+      - '.github/workflows/tests.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'api/**'
+
+jobs:
+  laravel-tests:
+    name: PHPUnit — Laravel API
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: tienda_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo, pdo_mysql, mbstring, xml, bcmath, zip
+          coverage: none
+
+      - name: Install Composer dependencies
+        working-directory: api
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Copy .env
+        working-directory: api
+        run: cp .env.example .env
+
+      - name: Generate app key
+        working-directory: api
+        run: php artisan key:generate
+
+      - name: Configure test database
+        working-directory: api
+        run: |
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=mysql/' .env
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=tienda_test/' .env
+          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=root/' .env
+          sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=root/' .env
+          sed -i 's/^DB_HOST=.*/DB_HOST=127.0.0.1/' .env
+
+      - name: Run migrations
+        working-directory: api
+        run: php artisan migrate --force
+
+      - name: Seed permissions
+        working-directory: api
+        run: php artisan db:seed --class=PermissionsSeeder --force
+
+      - name: Run PHPUnit tests
+        working-directory: api
+        run: php artisan test --stop-on-failure
+
+      - name: Composer security audit
+        working-directory: api
+        run: composer audit

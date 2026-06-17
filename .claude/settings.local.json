@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(New-Item -ItemType Directory -Path \"D:\\\\Sitios Web\\\\lacasavolvo\\\\api\\\\storage\\\\framework\\\\views\" -Force)",
+      "WebSearch",
+      "Read(//c/Users/Rene_/Downloads/PNG_SVG/PNG_SVG/**)",
+      "Read(//d/Desarrollo Web Bolivia/.ai/templates/**)",
+      "Read(//c/Users/Rene_/.claude/**)",
+      "Read(//c/Windows/System32/drivers/etc/**)",
+      "Read(//c/Users/Rene_/Downloads/laravel/laravel/app/Http/Controllers/**)",
+      "Bash(git add *)",
+      "Bash(cd \"d:/Sitios Web/lacasavolvo\" && git commit -F .git/MSG_AUDIT.txt 2>&1 | tail -8 && rm -f .git/MSG_AUDIT.txt && echo \"--- log ---\" && git log --oneline -1)",
+      "Bash(rm -f .git/LCV_MSG.txt)",
+      "Bash(printf '%s\\\\n' 'docs\\(audit\\): registrar loop 20 \\(Sucursales\\) en ledger y matriz' '' 'Loop 20 del auditor adversarial: guard de 5 burlado por gap de ids \\(ALTA\\),' 'seeder da sucursales.create a VENDEDOR vs legacy \\(ALTA\\), overflow/NOT NULL/' 'atomicidad \\(MEDIA\\). 7/7 mutantes muertos. Modulo Admin/Sucursales -> cubierto.' '' 'Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')",
+      "Bash(rm -f .git/LCV_MSG2.txt)",
+      "Bash(rm -f \"/d/Sitios Web/lacasavolvo/.git/deploy-loop21.ps1\" && echo \"temp script borrado\" *)",
+      "Bash(git check-ignore *)",
+      "WebFetch(domain:github.com)",
+      "Bash(git tag *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Rene_\\.claude",
+      "D:\\Desarrollo Web Bolivia\\.ai\\templates",
+      "D:\\Sitios Web\\lacasavolvo\\.git"
+    ]
+  }
+}

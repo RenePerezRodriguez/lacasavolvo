@@ -1,0 +1,13 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Cuenta extends Model
+{
+    use HasFactory;
+    protected $table = 'cuentas';
+    protected $fillable = ['nombre', 'telefono', 'email', 'direccion', 'nit', 'tipo', 'estado', 'empresa_id', 'localidad_id', 'departamento', 'saldo'];
+}

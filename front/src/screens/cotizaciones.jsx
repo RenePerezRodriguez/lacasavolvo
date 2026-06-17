@@ -1,0 +1,443 @@
+/**
+ * @fileoverview Pantalla de cotizaciones con KPIs, conversión a venta y detalle editable.
+ */
+
+import React, { useState, useEffect, useRef } from 'react';
+import { useListData, useColumnVisibility } from '../lib/hooks.js';
+import logger from '../lib/logger.js';
+import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput } from '../lib/components.jsx';
+import { CotizacionFormModal } from './forms.jsx';
+import { openPdf, cotizaciones as cotizApi } from '../services/api.js';
+
+/**
+ * Listado paginado de cotizaciones con KPIs y opción de convertir a venta.
+ * @param {object} props
+ * @param {function(string|object): void} props.onNav - Navegación.
+ * @param {number} props.sucursalId - ID de sucursal activa.
+ * @returns {JSX.Element}
+ */
+export function Cotizaciones({ onNav, sucursalId, user, effectivePermissions }) {
+  const [estado, setEstado]         = useState("TODOS");
+  const [q, setQ]                   = useState("");
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
+  const [skip, setSkip]             = useState(0);
+  const [pageSize, setPageSize]     = useState(15);
+  const [formOpen, setFormOpen]     = useState(false);
+  const [converting, setConverting] = useState(null);
+  const [sort, setSort]             = useState({ col: 'id', dir: 'desc' });
+  const { hiddenCols, toggleCol, visibleCols, showCols, setShowCols } = useColumnVisibility('cotizaciones', ['sucursal']);
+  const canCreate = (effectivePermissions || []).some(p => p === 'cotizaciones.create');
+  // El KPI de monto total solo es visible para GERENTE y ADMIN (respeta rol simulado)
+  const effectiveRole = user?.simulated_role_name || user?.role;
+  const showMontoKpi  = ['ADMIN', 'GERENTE'].includes(effectiveRole);
+
+  const { items: cotizaciones, total, kpis, loading, reload } = useListData(
+    cotizApi.list, cotizApi.kpis,
+    () => ({
+      skip, take: pageSize,
+      sort: sort.col, dir: sort.dir,
+      ...(estado !== "TODOS" && { estado_filtro: estado }),
+      ...(q && { search: q }),
+      ...(fechaDesde && { fecha_desde: fechaDesde }),
+      ...(fechaHasta && { fecha_hasta: fechaHasta }),
+    }),
+    [estado, q, fechaDesde, fechaHasta, skip, pageSize, sort, sucursalId]
+  );
+
+  const handlePageSize = (n) => { setPageSize(n); setSkip(0); };
+
+  async function handleConvertir(c) {
+    if (!window.confirm(`¿Convertir cotización #${c.id} a venta? Se creará una venta PROFORMA con los mismos ítems.`)) return;
+    setConverting(c.id);
+    try {
+      const r = await cotizApi.venta(c.id);
+      onNav({ name: 'venta-nueva', id: r.data.id, vData: r.data });
+    } catch (e) { logger.error(e); }
+    finally { setConverting(null); }
+  }
+
+  const page  = Math.floor(skip / pageSize) + 1;
+  const pages = Math.ceil(total / pageSize);
+
+  const cols = [
+    { key: 'id', title: '#', width: 90, sortable: true, render: c => <span className="mono" style={{fontSize:12, fontWeight:700, color:"var(--accent)"}}>#{c.id}</span> },
+    { key: 'fecha', title: 'Fecha', width: 120, sortable: true, render: c => <span className="num">{c.fecha}</span> },
+    { key: 'cuenta', title: 'Cliente', sortable: true, render: c => <span className="strong">{c.cuenta}</span> },
+    { key: 'total', title: 'Total', width: 160, align: 'right', sortable: true, render: c => <span className="mono tabular strong">{c.total}</span> },
+    { key: 'estado', title: 'Estado', width: 120, sortable: true, render: c => <StatusBadge value={c.estado}/> },
+    { key: 'sucursal', title: 'Sucursal', width: 120, defaultHidden: true, render: c => <Badge tone="neutral" outline>{c.sucursal || '—'}</Badge> },
+    { key: 'actions', title: 'Acciones', width: 120, align: 'right', render: c => (
+      <div className="actions">
+        <button className="icon-btn" title="Convertir a venta" disabled={converting === c.id || c.estado !== 'VALIDO'} onClick={e=>{e.stopPropagation(); handleConvertir(c);}}>
+          {converting === c.id ? <Icon name="fa-spinner fa-spin" style={{fontSize:11}}/> : <Icon name="fa-arrow-right-arrow-left" style={{fontSize:11}}/>}
+        </button>
+        {c.estado === 'VALIDO' ? (
+          <button className="icon-btn" title="Editar cotización" onClick={e=>{e.stopPropagation(); onNav({ name: 'cotizacion-detail', id: c.id, cData: c });}}><Icon name="fa-pen" style={{fontSize:11, color: "var(--accent)"}}/></button>
+        ) : (
+          <button className="icon-btn" title="Ver detalle" onClick={e=>{e.stopPropagation(); onNav({ name: 'cotizacion-detail', id: c.id, cData: c });}}><Icon name="fa-eye" style={{fontSize:11}}/></button>
+        )}
+        <PdfButton iconOnly onPdf={() => openPdf(`/cotizaciones/${c.id}/pdf`)} />
+      </div>
+    )}
+  ];
+
+  return (
+    <div className="fade-up stack" style={{"--gap":"24px"}}>
+      <PageHead title="Cotizaciones" sub="Proformas con seguimiento de validez y conversión"
+        actions={canCreate ? <Button variant="accent" icon="fa-plus" size="sm" onClick={() => setFormOpen(true)}>Nueva cotización</Button> : null}
+      />
+      {formOpen && <CotizacionFormModal onClose={() => setFormOpen(false)} onSaved={(newCot) => { setFormOpen(false); setSkip(0); reload(); if(newCot) onNav({ name: 'cotizacion-detail', id: newCot.id, cData: newCot }); }}/>}
+
+      <div className={showMontoKpi ? "grid-4" : "grid-3"}>
+        <KPI label="Cotizaciones" value={kpis?.total ?? "—"} />
+        <KPI label="Válidas" value={kpis?.valido ?? "—"} />
+        <KPI label="Anuladas" value={kpis?.anulado ?? "—"} />
+        {showMontoKpi && <KPI label="Monto total" value={kpis?.monto ?? "—"} />}
+      </div>
+
+      <div className="card">
+        <div style={{padding: 14, display:"flex", gap:10, flexWrap:"wrap", alignItems:"flex-end"}}>
+          <div style={{flex:1, minWidth: 220}}>
+            <div className="filter-label">Búsqueda</div>
+            <div className="input-group">
+              <span className="lead-icon"><Icon name="fa-magnifying-glass" style={{fontSize:12}}/></span>
+              <input className="input" placeholder="Buscar por #ID, cliente…" value={q} onChange={(e)=>{setQ(e.target.value); setSkip(0);}}/>
+            </div>
+          </div>
+          <div>
+            <div className="filter-label">Período</div>
+            <div className="row" style={{gap:6}}>
+              <input className="input" type="date" value={fechaDesde} title="Desde" style={{width:140}} onChange={e=>{setFechaDesde(e.target.value); setSkip(0);}}/>
+              <input className="input" type="date" value={fechaHasta} title="Hasta" style={{width:140}} onChange={e=>{setFechaHasta(e.target.value); setSkip(0);}}/>
+            </div>
+          </div>
+          <div>
+            <div className="filter-label">Estado</div>
+            <div className="seg-tabs">
+              {["TODOS","VALIDO","ANULADO"].map(e => (
+                <button key={e} className={`seg ${estado === e ? "active" : ""}`} onClick={()=>{setEstado(e); setSkip(0);}}>{e[0]+e.slice(1).toLowerCase()}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="filter-label">Pág.</div>
+            <PageSizeSelector value={pageSize} onChange={handlePageSize}/>
+          </div>
+          <div style={{position:"relative"}}>
+            <div className="filter-label">Columnas</div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowCols(!showCols)} style={{whiteSpace:"nowrap"}}>
+              <Icon name="fa-columns" style={{fontSize:10,marginRight:4}}/>
+              {cols.filter(c => !hiddenCols.has(c.key)).length}/{cols.length}
+            </button>
+            {showCols && (
+              <div style={{position:"absolute",top:"100%",right:0,marginTop:4,background:"var(--surface)",border:"1px solid var(--line)",borderRadius:"var(--r-md)",boxShadow:"var(--sh-lg)",zIndex:20,padding:8,minWidth:180}}>
+                {cols.filter(c => c.key !== 'acciones').map(c => (
+                  <label key={c.key} className="row" style={{gap:8,padding:"4px 8px",fontSize:11,cursor:"pointer",alignItems:"center"}}>
+                    <input type="checkbox" checked={!hiddenCols.has(c.key)} onChange={() => toggleCol(c.key)} style={{margin:0}}/>
+                    <span style={{fontWeight:500,color:"var(--ink)"}}>{c.title}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {loading ? (
+          <div style={{padding:40, textAlign:"center", color:"var(--soft)"}}><Icon name="fa-spinner fa-spin" style={{fontSize:20}}/></div>
+        ) : (
+          <DataTable
+            data={cotizaciones}
+            sortCol={sort.col}
+            sortDir={sort.dir}
+            onSort={(col, dir) => setSort({ col, dir })}
+            onRowClick={c => onNav({ name: 'cotizacion-detail', id: c.id, cData: c })}
+            columns={visibleCols(cols)}
+          />
+        )}
+        <Pager from={skip + 1} to={Math.min(skip + pageSize, total)} total={total} page={page} pages={pages} onPage={(p) => setSkip((p - 1) * pageSize)}/>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Detalle de cotización: ítems editables, conversión a venta y anulación.
+ * @param {object} props
+ * @param {number} props.cotizacionId - ID de la cotización.
+ * @param {object} [props.cotizacionData] - Datos precargados desde el listado.
+ * @param {function(string|object): void} props.onNav - Navegación.
+ * @returns {JSX.Element}
+ */
+export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
+  const [detalles, setDetalles]     = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [saving, setSaving]         = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [c, setC]                   = useState(cotizacionData ?? null);
+  const [error, setError]           = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      cotizApi.show(cotizacionId).then(r => { setC(prev => ({ ...prev, ...r.data })); }),
+      cotizApi.detalles(cotizacionId).then(r => setDetalles(r.data ?? [])),
+    ]).catch(logger.error).finally(() => setLoading(false));
+  }, [cotizacionId]);
+
+
+  async function reload() { const r = await cotizApi.detalles(cotizacionId); setDetalles(r.data ?? []); }
+
+  /**
+   * Agrega un producto a la cotización y recarga los detalles.
+   * @param {object} prod - Producto seleccionado en ProductSearchInput.
+   */
+  async function addItem(prod) {
+    setError(null); setSaving(true);
+    try { await cotizApi.agregarItem({ cotizacion_id: cotizacionId, producto_id: prod.id, cantidad: 1 }); await reload(); }
+    catch (e) { setError(e?.response?.data?.error ?? e?.response?.data?.message ?? 'Error al agregar producto'); }
+    finally { setSaving(false); }
+  }
+
+  async function updateCant(item, newCant) {
+    if (newCant < 1) return; setSaving(true);
+    try { await cotizApi.updateItem({ registro: item.id, cantidad: newCant }); await reload(); }
+    finally { setSaving(false); }
+  }
+
+  /**
+   * Cambia el PRECIO unitario de un ítem de la cotización (editable hasta la v2, igual que
+   * en ventas — pedido de QA). El endpoint de cotizaciones recibe el precio como `precio`.
+   * @param {object} item - Detalle de cotización.
+   * @param {number|string} nuevoPrecio - Nuevo precio unitario.
+   */
+  async function updatePrecio(item, nuevoPrecio) {
+    const precio = parseFloat(nuevoPrecio);
+    if (isNaN(precio) || precio < 0 || precio === parseFloat(item.costo)) return;
+    setSaving(true);
+    try { await cotizApi.updateItem({ registro: item.id, cantidad: item.cantidad, precio }); await reload(); }
+    finally { setSaving(false); }
+  }
+
+  async function removeItem(item) {
+    setSaving(true);
+    try { await cotizApi.deleteItem(item.id); await reload(); }
+    finally { setSaving(false); }
+  }
+
+  async function handleConvertir() {
+    if (!window.confirm(`¿Convertir cotización #${cotizacionId} a venta?`)) return;
+    setConverting(true); setError(null);
+    try {
+      const r = await cotizApi.venta(cotizacionId);
+      onNav({ name: 'venta-nueva', id: r.data.id, vData: r.data });
+    } catch { setError('Error al convertir a venta'); }
+    finally { setConverting(false); }
+  }
+
+  async function handleAnular() {
+    if (!window.confirm('¿Anular esta cotización?')) return;
+    setSaving(true);
+    try { await cotizApi.destroy(cotizacionId); onNav('cotizaciones'); }
+    finally { setSaving(false); }
+  }
+
+  const [descuento, setDescuento]   = useState(0);
+  const [descuentoDirty, setDescuentoDirty] = useState(false);
+  const descuentoTimer = useRef(null);
+
+  useEffect(() => { if (c?.descuento !== undefined) { setDescuento(parseFloat(c.descuento) || 0); setDescuentoDirty(false); } }, [c?.descuento]);
+
+  const estado   = c?.estado ?? '—';
+  const editable = estado === 'VALIDO';
+  const montoNum = detalles.reduce((s, d) => s + parseFloat(d.costo ?? 0) * d.cantidad, 0);
+  const totalNum = Math.max(0, montoNum - descuento);
+
+  async function guardarDescuento(d) {
+    if (!c?.cuenta_id || !c?.fecha_raw) {
+      setError('No se puede guardar: faltan datos de la cotización. Recarga la página.');
+      return;
+    }
+    setError(null); setSaving(true);
+    try {
+      await cotizApi.updateEncabezado({
+        cotizacion_id: cotizacionId,
+        cuenta_id: c.cuenta_id,
+        fecha: c.fecha_raw,
+        descuento: d,
+      });
+      setDescuentoDirty(false);
+    } catch (e) {
+      setError('Error al guardar descuento: ' + (e?.response?.data?.error || e.message));
+    }
+    finally { setSaving(false); }
+  }
+
+  function handleDescuento(val) {
+    const d = parseFloat(val) || 0;
+    setDescuento(d);
+    setDescuentoDirty(true);
+    if (descuentoTimer.current) clearTimeout(descuentoTimer.current);
+    descuentoTimer.current = setTimeout(() => guardarDescuento(d), 800);
+  }
+
+  async function handleGuardar() {
+    await guardarDescuento(descuento);
+    await reload();
+  }
+
+  if (loading) return <div style={{display:'grid',placeItems:'center',height:300}}><Icon name="fa-spinner fa-spin" style={{fontSize:24,color:'var(--soft)'}}/></div>;
+
+  return (
+    <div className="fade-up stack" style={{"--gap":"20px"}}>
+      <PageHead title={`Cotización #${cotizacionId}`} sub={`${c?.cuenta??'—'} · ${c?.fecha??'—'}`}
+        actions={<>
+          <Button variant="ghost" icon="fa-arrow-left" size="sm" onClick={()=>onNav('cotizaciones')}>Volver</Button>
+          <PdfButton onPdf={() => openPdf(`/cotizaciones/${cotizacionId}/pdf`)} />
+          {editable && <Button variant="ghost" icon="fa-ban" size="sm" style={{color:"var(--danger)"}} disabled={saving} onClick={handleAnular}>Anular</Button>}
+        </>}
+      />
+      {error && <div style={{padding:"10px 14px",background:"var(--danger-soft)",border:"1px solid rgba(220,38,38,.25)",borderRadius:"var(--r-md)",fontSize:13,color:"var(--danger)",display:"flex",gap:8,alignItems:"center"}}><Icon name="fa-circle-exclamation" style={{fontSize:12,flexShrink:0}}/><span>{error}</span></div>}
+      <div className="grid-12">
+        <div className="stack" style={{"--gap":"16px"}}>
+          {editable && (
+            <Card pad={false}>
+              <div style={{padding:16}}>
+                <ProductSearchInput onSelect={addItem} placeholder="Buscar producto para agregar…" />
+              </div>
+            </Card>
+          )}
+          <Card pad={false}>
+            <div className="row" style={{padding:"12px 16px",borderBottom:"1px solid var(--line)",justifyContent:"space-between"}}>
+              <div className="row" style={{gap:12}}>
+                <span style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>Productos de la cotización</span>
+                <Badge tone="neutral">{detalles.length}</Badge>
+                {saving && <Icon name="fa-spinner fa-spin" style={{fontSize:12,color:"var(--soft)"}}/>}
+              </div>
+              <StatusBadge value={estado}/>
+            </div>
+            {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-file-invoice"/> : (
+              <table className="tbl">
+                <thead><tr>
+                  <th>Producto</th>
+                  <th className="center" style={{width:editable?150:80}}>Cantidad</th>
+                  <th className="right" style={{width:editable?170:120}}>{editable ? 'Precio (editable)' : 'Precio'}</th>
+                  <th className="right" style={{width:130}}>Subtotal</th>
+                  {editable && <th style={{width:40}}></th>}
+                </tr></thead>
+                <tbody>
+                  {detalles.map(it => (
+                    <tr key={it.id}>
+                      <td>
+                        <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{it.descripcion}</div>
+                        <div className="row" style={{gap:6,marginTop:2}}>
+                        <span className="mono" style={{fontSize:10.5,color:"var(--soft)"}}>#{it.producto_id ?? it.id} · {it.codigo}</span>
+                          <span style={{fontSize:10.5,color:"var(--accent)",fontWeight:600}}>{it.marca}</span>
+                        </div>
+                      </td>
+                      <td className="center">
+                        {editable ? (
+                          <div style={{display:"inline-flex",alignItems:"center",border:"1px solid var(--line)",borderRadius:"var(--r-md)",overflow:"hidden"}}>
+                            <button onClick={()=>updateCant(it,it.cantidad-1)} disabled={saving} style={{width:30,height:30,color:"var(--soft)"}}><Icon name="fa-minus" style={{fontSize:10}}/></button>
+                            <div className="mono tabular" style={{width:48,textAlign:"center",fontWeight:700,color:"var(--ink)",fontSize:13}}>{it.cantidad}</div>
+                            <button onClick={()=>updateCant(it,it.cantidad+1)} disabled={saving} style={{width:30,height:30,color:"var(--soft)"}}><Icon name="fa-plus" style={{fontSize:10}}/></button>
+                          </div>
+                        ) : <span className="mono tabular" style={{fontWeight:700}}>{it.cantidad}</span>}
+                      </td>
+                      <td className="right mono tabular">
+                        {editable ? (
+                          <div style={{display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4}}>
+                            <div className="input-group" style={{width:120}}>
+                              <span className="lead-icon" style={{fontSize:10, color:"var(--soft)"}}>Bs</span>
+                              <input
+                                key={`cp-${it.id}-${it.costo}`}
+                                className="input mono tabular"
+                                type="number" min="0" step="0.01"
+                                defaultValue={parseFloat(it.costo).toFixed(2)}
+                                disabled={saving}
+                                onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                                onBlur={(e) => updatePrecio(it, e.target.value)}
+                                style={{textAlign:"right", fontSize:13, padding:"6px 8px 6px 28px"}}
+                                title="Precio unitario (editable)"
+                              />
+                            </div>
+                            {(it.p_norm != null || it.p_fact != null) && (
+                              <div className="row" style={{gap:4}}>
+                                <button type="button" disabled={saving} title={`Sin factura: Bs ${Number(it.p_norm).toFixed(2)}`}
+                                  onClick={() => updatePrecio(it, it.p_norm)}
+                                  className="btn btn-ghost" style={{padding:"1px 6px", fontSize:10, fontWeight:700, height:"auto"}}>S/F</button>
+                                <button type="button" disabled={saving} title={`Con factura: Bs ${Number(it.p_fact).toFixed(2)}`}
+                                  onClick={() => updatePrecio(it, it.p_fact)}
+                                  className="btn btn-ghost" style={{padding:"1px 6px", fontSize:10, fontWeight:700, height:"auto"}}>C/F</button>
+                              </div>
+                            )}
+                          </div>
+                        ) : `Bs ${parseFloat(it.costo).toFixed(2)}`}
+                      </td>
+                      <td className="right mono tabular strong">{it.subtotal ?? `Bs ${(parseFloat(it.costo ?? 0) * it.cantidad).toFixed(2)}`}</td>
+                      {editable && <td><button className="icon-btn danger" disabled={saving} onClick={()=>removeItem(it)}><Icon name="fa-trash" style={{fontSize:11}}/></button></td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+        </div>
+        <div className="stack" style={{"--gap":"16px"}}>
+          <Card title="Acciones">
+            <div className="stack" style={{"--gap":"10px"}}>
+              {editable && (
+                <>
+                  <div className="field">
+                    <label className="label">Descuento</label>
+                    <div className="input-group">
+                      <span className="lead-icon" style={{fontWeight:700}}>Bs</span>
+                      <input className="input mono" type="number" min="0" step="0.01"
+                        value={descuento || ''} placeholder="0.00"
+                        onChange={e => handleDescuento(e.target.value)}
+                        style={{textAlign:"right",fontSize:14,fontWeight:600}}/>
+                    </div>
+                  </div>
+                  <Button variant="secondary" size="md"
+                    icon={saving ? "fa-spinner fa-spin" : (descuentoDirty ? "fa-floppy-disk" : "fa-check")}
+                    disabled={saving || !descuentoDirty}
+                    onClick={handleGuardar}
+                    style={{width:"100%"}}>
+                    {saving ? "Guardando…" : descuentoDirty ? "Guardar cambios" : "Guardado"}
+                  </Button>
+                  <Button variant="accent" size="lg" icon="fa-arrow-right-arrow-left"
+                    disabled={detalles.length===0||converting} onClick={handleConvertir} style={{width:"100%"}}>
+                    {converting ? <><Icon name="fa-spinner fa-spin" style={{marginRight:6}}/>Procesando…</> : 'Convertir a venta'}
+                  </Button>
+                </>
+              )}
+            </div>
+          </Card>
+          <Card title="Resumen">
+            <div className="stack" style={{"--gap":"10px"}}>
+              {[{label:"N° Cotización",value:`#${cotizacionId}`},{label:"Cliente",value:c?.cuenta??'—'},{label:"Fecha",value:c?.fecha??'—'}].map(r => (
+                <div key={r.label} className="row" style={{justifyContent:"space-between",fontSize:12}}>
+                  <span style={{color:"var(--soft)"}}>{r.label}</span>
+                  <span style={{fontWeight:600,color:"var(--ink)"}}>{r.value}</span>
+                </div>
+              ))}
+              <div className="row" style={{justifyContent:"space-between",fontSize:12,alignItems:"center"}}>
+                <span style={{color:"var(--soft)"}}>Subtotal</span>
+                <span style={{fontWeight:600,color:"var(--ink)"}}>Bs {montoNum.toFixed(2)}</span>
+              </div>
+              <div className="row" style={{justifyContent:"space-between",fontSize:12,alignItems:"center"}}>
+                <span style={{color:"var(--soft)"}}>Descuento</span>
+                <span style={{fontWeight:600,color: descuento > 0 ? "var(--danger)" : "var(--ink)"}}>Bs {descuento.toFixed(2)}</span>
+              </div>
+              <div style={{height:1,background:"var(--line)",margin:"4px 0"}}></div>
+              <div className="row" style={{justifyContent:"space-between",fontSize:13}}>
+                <span style={{fontWeight:700,color:"var(--ink)"}}>Total</span>
+                <span style={{fontWeight:700,color:"var(--ink)"}}>Bs {totalNum.toFixed(2)}</span>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}

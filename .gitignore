@@ -1,0 +1,56 @@
+# ── Laravel (api/) ──────────────────────────────────────────────
+api/vendor/
+api/.env
+api/.env.*
+!api/.env.example
+api/storage/logs/
+api/storage/framework/cache/
+api/storage/framework/sessions/
+api/storage/framework/views/
+api/bootstrap/cache/
+api/node_modules/
+
+# ── React (front/) ───────────────────────────────────────────────
+front/node_modules/
+front/dist/
+front/.env
+front/.env.*
+!front/.env.example
+!front/.env.e2e.example
+
+# ── Archivos sensibles / pesados ─────────────────────────────────
+*.sql
+*.sql.gz
+*.sql.zip
+*.dump
+*.zip
+
+# ── PHP config local (servidor) ──────────────────────────────────
+.user.ini
+php.ini
+
+# ── PHPUnit ──────────────────────────────────────────────────────
+.phpunit.result.cache
+# phpunit.xml local (con credenciales del DB de test) — usar phpunit.xml.dist como plantilla
+api/phpunit.xml
+
+# ── Diagnóstico temporal (remover en producción) ─────────────────
+api/public/diagnose*.php
+api/public/import.zip
+
+# ── Documentación con credenciales ─────────────────────────────────
+docs/DEPLOY.md
+
+# ── Credenciales de deploy (NO commitear, como DEPLOY.md) ─
+api/scripts/deploy/.deploy.env
+api/scripts/deploy/upload-ftp-clean.ps1
+
+# ── Scratch / salidas temporales (datos sensibles: chats, dumps de QA) ─
+.scratch/
+
+# ── Sistema ──────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+*.log
+*.log
