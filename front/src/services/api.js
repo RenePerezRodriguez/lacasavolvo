@@ -188,6 +188,9 @@ export const estadisticas = {
   ventasPeriodo:         (params) => http.get('/estadisticas/ventas-periodo', { params }),
   topProductos:          (params) => http.get('/estadisticas/top-productos', { params }),
   topClientes:           (params) => http.get('/estadisticas/top-clientes', { params }),
+  // Dashboard/inicio: cualquier rol autenticado, acotado a la sucursal activa.
+  dashVentasPeriodo:     (params) => http.get('/dashboard/ventas-periodo', { params }),
+  dashTopProductos:      (params) => http.get('/dashboard/top-productos', { params }),
   exportarRotacion:      (params) => http.get('/estadisticas/exportar-rotacion',       { params, responseType: 'arraybuffer', headers: { Accept: 'text/csv,*/*' } }),
   exportarRotacionSucursal: (params) => http.get('/estadisticas/exportar-rotacion-sucursal', { params, responseType: 'arraybuffer', headers: { Accept: 'text/csv,*/*' } }),
   exportarVentasPeriodo: (params) => http.get('/estadisticas/exportar-ventas-periodo', { params, responseType: 'arraybuffer', headers: { Accept: 'text/csv,*/*' } }),

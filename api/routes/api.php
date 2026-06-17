@@ -196,6 +196,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{cuenta}',                [CuentaController::class, 'apiShow']);
     });
 
+    // ── Dashboard (inicio) — cualquier rol autenticado, acotado a la sucursal activa ──
+    // A diferencia de /estadisticas (ADMIN/GERENTE), el inicio lo ve todo el mundo pero
+    // solo de SU sucursal. Sin middleware de permiso: basta estar logueado.
+    Route::prefix('dashboard')->group(function () {
+        Route::get('/ventas-periodo', [EstadisticaController::class, 'dashboardVentasPeriodo']);
+        Route::get('/top-productos',  [EstadisticaController::class, 'dashboardTopProductos']);
+    });
+
     // ── Estadísticas ──────────────────────────────────────────────────────
     Route::prefix('estadisticas')->group(function () {
         Route::get('/rotacion',                    [EstadisticaController::class, 'rotacion']);
