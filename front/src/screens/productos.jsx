@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useListData, useColumnVisibility } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
-import { Icon, Button, Badge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable } from '../lib/components.jsx';
+import { Icon, Button, Badge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, CopyableCode } from '../lib/components.jsx';
 import { ProductoFormModal } from './forms.jsx';
 import { productos as prodApi } from '../services/api.js';
 
@@ -39,7 +39,9 @@ export function Productos({ onNav, sucursalId, user, effectivePermissions }) {
 
   const columns = [
     { key: 'id', title: 'ID', sortable: true, width: 70, render: p => <span className="mono" style={{fontSize:11, fontWeight:600, color:"var(--soft)"}}>#{p.id}</span> },
-    { key: 'codigo', title: 'Código', sortable: true, width: 130, render: p => <span className="mono" style={{fontSize:11, fontWeight:700, color:"var(--accent)"}}>{p.codigo}</span> },
+    // Código copiable (observación de QA: era texto/enlace y al clickear navegaba al detalle,
+    // no se podía copiar para pegarlo en el buscador). CopyableCode frena la navegación de fila.
+    { key: 'codigo', title: 'Código', sortable: true, width: 150, render: p => <CopyableCode code={p.codigo} codeStyle={{fontSize:11, fontWeight:700, color:"var(--accent)"}}/> },
     { key: 'descripcion', title: 'Descripción', sortable: true, className: 'strong' },
     { key: 'marca', title: 'Marca', sortable: true, width: 120, render: p => <Badge tone="neutral" outline>{p.marca}</Badge> },
     { key: 'industria', title: 'Industria', sortable: true, width: 120, render: p => <span style={{fontSize:12, color:"var(--soft)"}}>{p.industria}</span> },
@@ -52,7 +54,10 @@ export function Productos({ onNav, sucursalId, user, effectivePermissions }) {
         : <span style={{color:"var(--soft)"}}>—</span>
     }] : []),
     { key: 'stock', title: 'Stock', sortable: true, width: sucursalId === 1 ? 180 : 80, className: 'center', render: p => {
-        const tone = (s) => s === 0 ? "var(--danger)" : s <= 5 ? "var(--warning)" : "var(--ink)";
+        // Colores uniformes (observación de QA): > 0 negro, = 0 rojo. Sin escalón naranja
+        // intermedio — había saldos > 0 que salían en rojo y confundían. El umbral "stock
+        // bajo (≤5)" sigue vivo como KPI y filtro, pero no tiñe las cantidades por sucursal.
+        const tone = (s) => s <= 0 ? "var(--danger)" : "var(--ink)";
         if (sucursalId === 1 && p.stocks && p.stocks.length > 1) {
           return (
             <div style={{display:"flex", gap:4, justifyContent:"center", flexWrap:"wrap"}}>
@@ -169,7 +174,7 @@ export function Productos({ onNav, sucursalId, user, effectivePermissions }) {
         ) : (
           <div style={{padding: 14, display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(230px, 1fr))", gap: 12}}>
             {filtered.map(p => (
-              <div key={p.id} onClick={() => onNav({ name: 'producto-detail', id: p.id, pData: p })}
+              <div key={p.id} onClick={() => { if (window.getSelection && String(window.getSelection()).length > 0) return; onNav({ name: 'producto-detail', id: p.id, pData: p }); }}
                 onMouseEnter={(e)=>{e.currentTarget.style.borderColor="var(--accent)"; e.currentTarget.style.boxShadow="var(--sh-md)";}}
                 onMouseLeave={(e)=>{e.currentTarget.style.borderColor="var(--line)"; e.currentTarget.style.boxShadow="";}}
                 style={{border:"1px solid var(--line)", borderRadius:"var(--r-md)", background:"var(--surface)", cursor:"pointer",
@@ -354,7 +359,7 @@ export function ProductoDetail({ productoId, productoData, onNav, user, effectiv
                 {p.stocks.map(s => (
                   <div key={s.id} style={{background:"var(--alt)", border:"1px solid var(--line)", borderRadius:"var(--r-md)", padding:"8px 14px", textAlign:"center", minWidth:64}}>
                     <span style={{fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".06em", color:"var(--soft)", display:"block"}}>{s.alias}</span>
-                    <span style={{fontSize:18, fontWeight:800, color:s.stock === 0 ? "var(--danger)" : "var(--ink)", fontVariantNumeric:"tabular-nums"}}>{s.stock}</span>
+                    <span style={{fontSize:18, fontWeight:800, color:s.stock <= 0 ? "var(--danger)" : "var(--ink)", fontVariantNumeric:"tabular-nums"}}>{s.stock}</span>
                   </div>
                 ))}
               </div>

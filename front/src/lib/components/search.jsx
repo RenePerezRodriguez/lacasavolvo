@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { productos as prodApi, cuentas as cuentasApi } from '../../services/api.js';
 import { canQuickAction } from '../roles.js';
-import { Icon, Button, Badge } from './primitives.jsx';
+import { Icon, Button, Badge, CopyableCode } from './primitives.jsx';
 
 
 /**
@@ -94,12 +94,13 @@ export function SearchModal({ onClose, onNav, onProductClick, effectivePermissio
             <>
               <div style={{padding: "12px 10px 4px", fontSize: 10, fontWeight:700, color:"var(--dust)", letterSpacing:".08em"}}>PRODUCTOS</div>
               <div style={{display:"flex", alignItems:"center", gap:12, padding:"4px 12px", fontSize:9, fontWeight:700, color:"var(--dust)", letterSpacing:".06em", textTransform:"uppercase", borderBottom:"1px solid var(--line)"}}>
-                <span style={{minWidth:180, flexShrink:0, display:"flex", gap:8}}>
+                <span style={{minWidth:190, flexShrink:0, display:"flex", gap:8}}>
                   <span style={{minWidth:32}}>ID</span>
-                  <span style={{minWidth:80, textAlign:"center"}}>Código</span>
+                  <span style={{minWidth:80}}>Código</span>
                 </span>
                 <span style={{flex:1, minWidth:0}}>Descripción / Marca</span>
-                <span style={{flexShrink:0, textAlign:"right", minWidth:150}}>Stock por sucursal</span>
+                <span style={{flexShrink:0, textAlign:"center", minWidth:140}}>Stock por sucursal</span>
+                <span style={{flexShrink:0, textAlign:"right", minWidth:92}}>Precio</span>
               </div>
               {results.map((p) => {
                 const st = p.stock ?? 0;
@@ -111,9 +112,10 @@ export function SearchModal({ onClose, onNav, onProductClick, effectivePermissio
                   <button key={p.id} onClick={() => { onClose(); onProductClick(p); }} style={{display:"flex", alignItems:"center", gap:12, padding:"10px 12px", width:"100%", textAlign:"left", borderRadius:"var(--r-md)"}}
                     onMouseEnter={(e)=>e.currentTarget.style.background="var(--hover)"}
                     onMouseLeave={(e)=>e.currentTarget.style.background=""}>
-                    <span style={{display:"flex", alignItems:"center", gap:8, minWidth: 180, flexShrink:0}}>
+                    <span style={{display:"flex", alignItems:"center", gap:8, minWidth: 190, flexShrink:0}}>
                       <span className="mono" style={{fontSize:10, color:"var(--soft)", fontWeight:500, minWidth:32}}>#{p.id}</span>
-                      <span className="mono" style={{fontSize:11, color:"var(--accent)", background:"var(--accent-soft)", padding:"3px 7px", borderRadius:4, fontWeight:700, minWidth:80, textAlign:"center"}}>{p.codigo}</span>
+                      {/* Código copiable (QA): copiar el código desde el buscador sin abrir el producto. */}
+                      <CopyableCode code={p.codigo} style={{minWidth:80}} codeStyle={{fontSize:11, color:"var(--accent)", background:"var(--accent-soft)", padding:"3px 7px", borderRadius:4, fontWeight:700}}/>
                     </span>
                     <span style={{flex:1, minWidth: 0, display:"flex", flexDirection:"column"}}>
                       <span style={{fontSize:13, fontWeight:600, color:"var(--body)", lineHeight:1.4}}>{p.descripcion}</span>
@@ -122,20 +124,31 @@ export function SearchModal({ onClose, onNav, onProductClick, effectivePermissio
                     {porSucursal && porSucursal.length > 0 ? (
                       // Desglose de stock por sucursal (CTR/MTR/TRJ/… como el sistema viejo):
                       // acceso rápido a las cantidades de TODAS las sucursales, no solo la actual.
-                      <span style={{display:"flex", alignItems:"flex-start", gap:7, flexShrink:0}}>
+                      // Colores uniformes (QA): > 0 negro, = 0 rojo.
+                      <span style={{display:"flex", alignItems:"flex-start", gap:7, flexShrink:0, minWidth:140, justifyContent:"center"}}>
                         {porSucursal.map((s) => (
                           <span key={s.id} title={s.nombre || s.alias} style={{display:"flex", flexDirection:"column", alignItems:"center", minWidth:28}}>
                             <span style={{fontSize:8.5, fontWeight:800, color:"var(--dust)", letterSpacing:".02em", textTransform:"uppercase"}}>{s.alias}</span>
-                            <span className="mono tabular" style={{fontSize:14, fontWeight:800, lineHeight:1.15, color: s.stock <= 0 ? "var(--danger)" : s.stock <= 5 ? "var(--warning)" : "var(--ink)"}}>{s.stock}</span>
+                            <span className="mono tabular" style={{fontSize:14, fontWeight:800, lineHeight:1.15, color: s.stock <= 0 ? "var(--danger)" : "var(--ink)"}}>{s.stock}</span>
                           </span>
                         ))}
                       </span>
                     ) : (
-                      <span style={{display:"flex", flexDirection:"column", alignItems:"flex-end", gap:3, flexShrink:0}}>
-                        <span className="mono tabular" style={{fontSize:14, fontWeight:800, color: st === 0 ? "var(--danger)" : st <= 5 ? "var(--warning)" : "var(--ink)", lineHeight:1}}>{st}</span>
+                      <span style={{display:"flex", flexDirection:"column", alignItems:"center", gap:3, flexShrink:0, minWidth:140}}>
+                        <span className="mono tabular" style={{fontSize:14, fontWeight:800, color: st === 0 ? "var(--danger)" : "var(--ink)", lineHeight:1}}>{st}</span>
                         <Badge tone={statusTone} dot>{statusLabel}</Badge>
                       </span>
                     )}
+                    {/* Precios de venta (QA: el buscador no los mostraba, había que abrir el producto).
+                        c/f = con factura (p_fact) · s/f = sin factura (p_norm). El costo NO se muestra. */}
+                    <span style={{display:"flex", flexDirection:"column", alignItems:"flex-end", flexShrink:0, lineHeight:1.25, minWidth:92}}>
+                      <span className="mono" style={{fontSize:12.5, fontWeight:700, color:"var(--ink)", whiteSpace:"nowrap"}}>
+                        Bs {Number(p.p_fact ?? 0).toFixed(2)} <span style={{fontSize:8.5, color:"var(--soft)", fontWeight:700}}>c/f</span>
+                      </span>
+                      <span className="mono" style={{fontSize:11, fontWeight:600, color:"var(--soft)", whiteSpace:"nowrap"}}>
+                        Bs {Number(p.p_norm ?? 0).toFixed(2)} <span style={{fontSize:8.5, fontWeight:700}}>s/f</span>
+                      </span>
+                    </span>
                   </button>
                 );
               })}
@@ -228,16 +241,17 @@ export function ProductSearchInput({ onSelect, placeholder = "Buscar producto…
               {showStock && (
                 Array.isArray(p.stocks) && p.stocks.length > 0 ? (
                   // Stock por sucursal (todas), no solo la actual — atajo del sistema viejo.
+                  // Colores uniformes (QA): > 0 negro, = 0 rojo.
                   <span style={{display:"flex", gap:6, flexShrink:0}}>
                     {p.stocks.map(s => (
                       <span key={s.id} title={s.nombre || s.alias} style={{display:"flex", flexDirection:"column", alignItems:"center", minWidth:24}}>
                         <span style={{fontSize:8, fontWeight:800, color:"var(--dust)", textTransform:"uppercase"}}>{s.alias}</span>
-                        <span className="mono" style={{fontSize:12, fontWeight:800, lineHeight:1.1, color: s.stock <= 0 ? "var(--danger)" : s.stock <= 5 ? "var(--warning)" : "var(--ink)"}}>{s.stock}</span>
+                        <span className="mono" style={{fontSize:12, fontWeight:800, lineHeight:1.1, color: s.stock <= 0 ? "var(--danger)" : "var(--ink)"}}>{s.stock}</span>
                       </span>
                     ))}
                   </span>
                 ) : (
-                  <span className="mono" style={{fontSize:11, fontWeight:700, color: p.stock > 5 ? "var(--success)" : p.stock > 0 ? "var(--warning)" : "var(--danger)"}}>
+                  <span className="mono" style={{fontSize:11, fontWeight:700, color: p.stock > 0 ? "var(--ink)" : "var(--danger)"}}>
                     {p.stock} disp.
                   </span>
                 )

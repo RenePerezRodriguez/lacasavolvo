@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Icon, Button, Badge, Card, Empty, PageHead, ProductSearchInput, AccountSearchInput } from '../../lib/components.jsx';
+import { Icon, Button, Badge, Card, Empty, PageHead, ProductSearchInput, AccountSearchInput, QtyStepper } from '../../lib/components.jsx';
 import { ventas as ventasApi } from '../../services/api.js';
 
 /**
@@ -274,11 +274,7 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
                         </div>
                       </td>
                       <td className="center">
-                        <div style={{display:"inline-flex", alignItems:"center", border:"1px solid var(--line)", borderRadius:"var(--r-md)", overflow:"hidden"}}>
-                          <button onClick={() => updateCant(it, it.cantidad - 1)} disabled={saving} style={{width:30, height:30, color:"var(--soft)"}}><Icon name="fa-minus" style={{fontSize:10}}/></button>
-                          <div className="mono tabular" style={{width:48, textAlign:"center", fontWeight:700, color:"var(--ink)", fontSize:13}}>{it.cantidad}</div>
-                          <button onClick={() => updateCant(it, it.cantidad + 1)} disabled={saving} style={{width:30, height:30, color:"var(--soft)"}}><Icon name="fa-plus" style={{fontSize:10}}/></button>
-                        </div>
+                        <QtyStepper value={it.cantidad} onChange={(n) => updateCant(it, n)} disabled={saving}/>
                       </td>
                       <td className="right">
                         {/* Precio EDITABLE (pedido de QA: el precio de venta no debe ser

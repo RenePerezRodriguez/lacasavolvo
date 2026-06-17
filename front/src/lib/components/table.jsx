@@ -110,8 +110,15 @@ export function DataTable({ data, columns, sortCol, sortDir, onSort, onRowClick,
       </thead>
       <tbody>
         {data.map((row, i) => (
-          <tr key={row.uid ?? row.id ?? i} 
-              onClick={(e) => onRowClick && onRowClick(row, e)}
+          <tr key={row.uid ?? row.id ?? i}
+              onClick={(e) => {
+                if (!onRowClick) return;
+                // No navegar si el usuario está SELECCIONANDO texto: así puede seleccionar y
+                // copiar los datos de la fila (descripción, ID, código, marca) sin que la fila
+                // salte al detalle. Observación de QA: al intentar copiar, la fila navegaba.
+                if (typeof window !== "undefined" && window.getSelection && String(window.getSelection()).length > 0) return;
+                onRowClick(row, e);
+              }}
               style={{cursor: onRowClick ? "pointer" : "default"}}>
             {columns.map((c, j) => (
               <td key={c.key || j} className={c.className || ''} data-label={c.title}>
