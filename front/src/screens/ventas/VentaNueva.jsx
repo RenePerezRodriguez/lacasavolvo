@@ -71,10 +71,20 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
   async function addItem(p) {
     if (!cliente) { setError('Selecciona un cliente primero'); return; }
     setError(null); setNegativos([]);
+    // Si el producto YA está en la venta, preguntar: sumar a la línea o crear una línea
+    // nueva para venderlo a OTRO precio (Opción 1 aprobada por QA). Por defecto se suma.
+    let nuevaLinea = false;
+    if (detalles.some(d => d.producto_id === p.id)) {
+      nuevaLinea = window.confirm(
+        'Este producto ya está en la venta.\n\n' +
+        'Aceptar = agregarlo como LÍNEA NUEVA (para venderlo a otro precio)\n' +
+        'Cancelar = sumar la cantidad a la línea existente'
+      );
+    }
     setSaving(true);
     try {
       const vid = await ensureVenta();
-      await ventasApi.agregarItem({ venta_id: vid, producto_id: p.id, cantidad: 1 });
+      await ventasApi.agregarItem({ venta_id: vid, producto_id: p.id, cantidad: 1, nueva_linea: nuevaLinea });
       await reloadDetalles(vid);
     } catch (e) { setError(e?.response?.data?.error ?? e?.response?.data?.message ?? 'Error al agregar producto'); }
     finally { setSaving(false); }
@@ -226,6 +236,10 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
 
       <div className="pos-grid">
         <div className="stack" style={{"--gap":"16px"}}>
+          {/* Buscador ANCLADO (sticky): se queda fijo arriba mientras se hace scroll de los
+              ítems, para no tener que volver a subir cada vez que se agrega otro producto
+              (pedido de QA). top≈86px = debajo del topbar (54) + crumb-bar (~32). */}
+          <div style={{position:"sticky", top:86, zIndex:10, background:"var(--page)"}}>
           <Card pad={false}>
             <div style={{padding:16, position:"relative"}}
               onClick={() => { if (!cliente && !showPago) handleProductClickWithoutCliente(); }}>
@@ -241,6 +255,7 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
               />
             </div>
           </Card>
+          </div>
 
           <Card pad={false}>
             <div className="row" style={{padding:"12px 16px", borderBottom:"1px solid var(--line)", justifyContent:"space-between"}}>

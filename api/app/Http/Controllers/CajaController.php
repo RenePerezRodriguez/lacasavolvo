@@ -18,11 +18,22 @@ class CajaController extends Controller
     {
         $sid = Auth::user()->sucursal_id;
         $hoy = Carbon::today()->toDateString();
-        $desde = $request->get('fecha_desde', $hoy);
-        $hasta = $request->get('fecha_hasta', $hoy);
 
         $apertura = Apertura::where('sucursal_id', $sid)->where('estado', 'ON')
             ->orderBy('id', 'desc')->first();
+
+        // DOBLE CONTEO (bug reportado en Tarija: saldo salía el doble). El cierre crea la
+        // apertura siguiente fechada MAÑANA con `apertura = saldo`, que YA incluye el neto del
+        // día cerrado. Si el saldo se calcula sumando las tranzas de "hoy" sobre esa apertura,
+        // el día se cuenta DOS veces. Solución: la ventana de ingresos/egresos arranca en la
+        // FECHA de la apertura activa (su monto ya contiene todo lo anterior):
+        //  - tras cerrar hoy: apertura=mañana → rango [mañana..hoy] invertido → 0 → saldo=apertura. ✓
+        //  - apertura abierta hoy: rango [hoy..hoy] → movimientos de hoy (igual que antes). ✓
+        //  - apertura multi-día sin cerrar: suma desde que se abrió (antes sólo sumaba hoy → era
+        //    otro error latente; ahora también queda correcto).
+        $base  = $apertura ? Carbon::parse($apertura->fecha)->toDateString() : $hoy;
+        $desde = $request->get('fecha_desde', $base);
+        $hasta = $request->get('fecha_hasta', $hoy);
 
         // `fecha` es una columna DATE: comparar con where() plano (no whereDate). whereDate
         // envuelve la columna en CAST(fecha AS DATE), lo que INUTILIZA `tranzas_fecha_idx` y
@@ -46,9 +57,14 @@ class CajaController extends Controller
     {
         $sid = Auth::user()->sucursal_id;
         $hoy = Carbon::today()->toDateString();
+        // Mismo período que el saldo (kpis): los movimientos del día son los del rango de la
+        // apertura activa, para que lo listado coincida con lo que compone el saldo (evita la
+        // confusión del doble conteo: ver kpis()).
+        $apertura = Apertura::where('sucursal_id', $sid)->where('estado', 'ON')->orderBy('id', 'desc')->first();
+        $base = $apertura ? Carbon::parse($apertura->fecha)->toDateString() : $hoy;
         // `fecha` es DATE → where() plano (no whereDate): mantiene usable `tranzas_fecha_idx`.
         $q = Tranza::with('cuenta')->where('sucursal_id', $sid)->where('estado', 'ON')
-            ->where('fecha', '>=', $request->get('fecha_desde', $hoy))
+            ->where('fecha', '>=', $request->get('fecha_desde', $base))
             ->where('fecha', '<=', $request->get('fecha_hasta', $hoy));
 
         if ($request->filled('fecha_desde')) $q->where('fecha', '>=', $request->fecha_desde);

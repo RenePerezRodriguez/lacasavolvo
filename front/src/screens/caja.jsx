@@ -6,6 +6,7 @@ import React, { useState, useEffect } from 'react';
 import logger from '../lib/logger.js';
 import { Icon, Button, Badge, Card, KPI, Empty, PageHead, DataTable, PdfButton, useToast } from '../lib/components.jsx';
 import { caja as cajaApi } from '../services/api.js';
+import { claseLabel } from '../lib/clase.js';
 
 /**
  * Mapa de clase de tranza → documento que la originó. Permite mostrar una
@@ -216,7 +217,7 @@ export function Caja({ onNav, sucursalId, user, effectivePermissions }) {
                   key: 'tipo', title: 'Tipo', width: 110,
                   render: m => (
                     <Badge tone={m.tipo === "INGRESO" ? "success" : "warning"} outline>
-                      <Icon name={m.tipo === "INGRESO" ? "fa-arrow-down" : "fa-arrow-up"} style={{fontSize:9, marginRight:3}}/>{m.clase}
+                      <Icon name={m.tipo === "INGRESO" ? "fa-arrow-down" : "fa-arrow-up"} style={{fontSize:9, marginRight:3}}/><span title={m.clase}>{claseLabel(m.clase)}</span>
                     </Badge>
                   )
                 },

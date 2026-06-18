@@ -301,11 +301,14 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
       <div className="grid-12">
         <div className="stack" style={{"--gap":"16px"}}>
           {editable && (
+            // Buscador ANCLADO (sticky) — se mantiene fijo al hacer scroll de los ítems (QA).
+            <div style={{position:"sticky", top:86, zIndex:10, background:"var(--page)"}}>
             <Card pad={false}>
               <div style={{padding:16}}>
                 <ProductSearchInput onSelect={addItem} placeholder="Buscar producto para agregar…" />
               </div>
             </Card>
+            </div>
           )}
           <Card pad={false}>
             <div className="row" style={{padding:"12px 16px",borderBottom:"1px solid var(--line)",justifyContent:"space-between"}}>

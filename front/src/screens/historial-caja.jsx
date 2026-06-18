@@ -6,24 +6,7 @@ import React, { useState, useEffect } from 'react';
 import logger from '../lib/logger.js';
 import { Icon, Button, Badge, KPI, Empty, PageHead } from '../lib/components.jsx';
 import { caja as cajaApi } from '../services/api.js';
-
-/**
- * Códigos de CLASE de tranza (abreviaturas heredadas del legacy en la BD) → etiqueta
- * legible. Observación de QA: la etiqueta "SAL" no se entendía (es "Salida"); ídem el
- * resto. Se muestra el nombre completo y se deja el código original como tooltip.
- */
-const CLASE_LABELS = {
-  VEN: 'Venta', COB: 'Cobro', COM: 'Compra', PAG: 'Pago',
-  ENV: 'Envío', ENT: 'Entrada', SAL: 'Salida',
-  'D-VEN': 'Dev. venta', 'D-COM': 'Dev. compra', 'D-ENV': 'Dev. envío',
-};
-
-/**
- * Traduce un código de clase de tranza a su etiqueta legible (fallback: el propio código).
- * @param {string} clase - Código de clase (ej. "SAL").
- * @returns {string} Etiqueta legible (ej. "Salida").
- */
-const claseLabel = (clase) => CLASE_LABELS[clase] ?? clase;
+import { claseLabel } from '../lib/clase.js';
 
 function AperturaDetalleModal({ apertura, onClose }) {
   const [tab, setTab]     = useState("tranzas");
@@ -212,7 +195,7 @@ export function HistorialCaja({ onNav, sucursalId }) {
                 <tr key={r.id}>
                   <td><span className="mono" style={{fontWeight:700, color:"var(--ink)"}}>#{r.id}</span></td>
                   <td className="num">{r.fecha}</td>
-                  <td><Badge tone="neutral" outline>{r.clase}</Badge></td>
+                  <td><Badge tone="neutral" outline><span title={r.clase}>{claseLabel(r.clase)}</span></Badge></td>
                   <td>{r.descripcion}</td>
               <td className="right mono tabular" style={{color:"var(--success)", fontWeight: r.ingreso > 0 ? 600 : 400}}>{r.ingreso > 0 ? `Bs ${Number(r.ingreso).toLocaleString(undefined,{minimumFractionDigits:2})}` : "—"}</td>
               <td className="right mono tabular" style={{color:"var(--warning)", fontWeight: r.egreso > 0 ? 600 : 400}}>{r.egreso > 0 ? `Bs ${Number(r.egreso).toLocaleString(undefined,{minimumFractionDigits:2})}` : "—"}</td>

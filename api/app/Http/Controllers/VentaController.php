@@ -171,6 +171,10 @@ class VentaController extends Controller
             // cantidad es int(11) en BD: `numeric` admitía fraccionarios que se
             // truncaban silenciosamente (monto inconsistente) o reventaban (overflow → 500).
             'cantidad'    => 'nullable|integer|min:1|max:100000',
+            // nueva_linea: fuerza un renglón NUEVO aunque el producto ya esté en la venta,
+            // para venderlo a OTRO precio en la misma venta (pedido de QA aprobado). Sin el
+            // flag se mantiene el comportamiento por defecto: sumar a la línea existente.
+            'nueva_linea' => 'nullable|boolean',
         ]);
 
         $venta = Venta::findOrFail($request->venta_id);
@@ -184,13 +188,16 @@ class VentaController extends Controller
         $cantidad = $request->cantidad ?? 1;
         $costo    = $request->filled('costo') ? (float) $request->costo : $prod->p_norm;
 
-        // Si el producto ya está en la venta (renglón VALIDO), sumamos la cantidad
-        // en lugar de crear una línea duplicada. Evita filas repetidas del mismo
-        // producto, que rompían el límite de devolución (calculado por renglón).
-        $detalle = Ventadetalle::where('venta_id', $venta->id)
-            ->where('producto_id', $prod->id)
-            ->where('estado', 'VALIDO')
-            ->first();
+        // Por defecto, si el producto ya está en la venta (renglón VALIDO) sumamos la cantidad
+        // en lugar de crear una línea duplicada. Con `nueva_linea` se fuerza un renglón nuevo
+        // para venderlo a otro precio (la devolución/anulación ya agregan por producto, no por
+        // renglón — ver devItem() y destroy()).
+        $detalle = $request->boolean('nueva_linea')
+            ? null
+            : Ventadetalle::where('venta_id', $venta->id)
+                ->where('producto_id', $prod->id)
+                ->where('estado', 'VALIDO')
+                ->first();
 
         if ($detalle) {
             $detalle->cantidad = $detalle->cantidad + $cantidad;
@@ -286,12 +293,17 @@ class VentaController extends Controller
         // Guard de stock del lado servidor: el front ya bloquea validar con stock
         // insuficiente (endpoint negativos), pero una llamada directa a la API podía
         // dejar el stock negativo (sobreventa). Replicamos el chequeo aquí.
+        // Chequeo AGRUPADO por producto: con líneas duplicadas del mismo producto (mismo
+        // producto a distintos precios), cada renglón podía pasar el chequeo individual pero
+        // la SUMA sobregiraba el stock. Se compara stock vs cantidad TOTAL del producto.
         $insuficientes = [];
         $col = 'stock' . $venta->sucursal_id;
-        foreach ($venta->detalles()->where('estado','VALIDO')->get() as $d) {
-            $p = Producto::find($d->producto_id);
-            if ($p && $p->$col < $d->cantidad) {
-                $insuficientes[] = ['id' => $p->id, 'codigo' => $p->codigo, 'stock' => $p->$col, 'pedido' => $d->cantidad];
+        foreach ($venta->detalles()->where('estado','VALIDO')->get()->groupBy('producto_id') as $producto_id => $lineas) {
+            $p = Producto::find($producto_id);
+            if (!$p) continue;
+            $totalPedido = $lineas->sum('cantidad');
+            if ($p->$col < $totalPedido) {
+                $insuficientes[] = ['id' => $p->id, 'codigo' => $p->codigo, 'stock' => $p->$col, 'pedido' => $totalPedido];
             }
         }
         if (!empty($insuficientes)) {
@@ -353,17 +365,22 @@ class VentaController extends Controller
         DB::beginTransaction();
         try {
             if ($venta->estado === 'VALIDO') {
-                // Restaurar stock descontando devoluciones ya hechas (igual que legacy)
-                $detalles = $venta->detalles()->where('estado','VALIDO')->get();
-                foreach ($detalles as $d) {
-                    $prod       = Producto::find($d->producto_id);
+                // Restaurar stock descontando devoluciones ya hechas (igual que legacy).
+                // Se AGRUPA por producto: con líneas duplicadas del mismo producto (mismo
+                // producto a distintos precios), el reintegro debe ser (totalVendido −
+                // totalDevuelto) UNA vez por producto. Antes recorría por renglón y le restaba
+                // el devuelto TOTAL a cada línea → con devoluciones parciales reintegraba de
+                // menos (descuadre de stock).
+                $col = 'stock' . $venta->sucursal_id;
+                foreach ($venta->detalles()->where('estado','VALIDO')->get()->groupBy('producto_id') as $producto_id => $lineas) {
+                    $prod = Producto::find($producto_id);
                     if (!$prod) continue;
-                    $cantDev    = Devventa::where('venta_id', $venta->id)
-                                    ->where('producto_id', $prod->id)
+                    $totalVendido = $lineas->sum('cantidad');
+                    $cantDev      = Devventa::where('venta_id', $venta->id)
+                                    ->where('producto_id', $producto_id)
                                     ->where('estado','ON')
                                     ->sum('cantidad');
-                    $col        = 'stock' . $venta->sucursal_id;
-                    $prod->$col = $prod->$col + ($d->cantidad - $cantDev);
+                    $prod->$col = $prod->$col + ($totalVendido - $cantDev);
                     $prod->save();
                 }
 
@@ -391,17 +408,21 @@ class VentaController extends Controller
         $venta = Venta::findOrFail($request->venta_id);
         $this->validarAccesoSucursal($venta->sucursal_id);
 
+        // Agrupado por producto: con líneas duplicadas (mismo producto a distintos precios)
+        // se compara el stock contra la cantidad TOTAL del producto, no renglón por renglón
+        // (mismo criterio que validar()).
         $insuficientes = [];
-        foreach ($venta->detalles()->where('estado','VALIDO')->get() as $d) {
-            $p      = Producto::findOrFail($d->producto_id);
-            $col    = 'stock' . $venta->sucursal_id;
-            if ($p->$col < $d->cantidad) {
+        $col = 'stock' . $venta->sucursal_id;
+        foreach ($venta->detalles()->where('estado','VALIDO')->get()->groupBy('producto_id') as $producto_id => $lineas) {
+            $p = Producto::findOrFail($producto_id);
+            $totalPedido = $lineas->sum('cantidad');
+            if ($p->$col < $totalPedido) {
                 $insuficientes[] = [
                     'id'     => $p->id,
                     'codigo' => $p->codigo,
                     'marca'  => $p->marca->nombre ?? '',
                     'stock'  => $p->$col,
-                    'pedido' => $d->cantidad,
+                    'pedido' => $totalPedido,
                 ];
             }
         }
