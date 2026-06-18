@@ -155,20 +155,30 @@ export default function App() {
     setRoute({ name: 'login' });
   }
 
+  /**
+   * Cambia la sucursal activa del usuario.
+   *
+   * ORDEN CRÍTICO: primero se actualiza el servidor (`switchSucursal` cambia
+   * `users.sucursal_id`) y RECIÉN DESPUÉS se mueve el estado local `sucursalId`.
+   * Las pantallas (Caja, Productos, Ventas…) se re-fetchean cuando cambia el prop
+   * `sucursalId`, y el backend resuelve los datos por `Auth::user()->sucursal_id`.
+   * Si se cambiara `sucursalId` ANTES del switch, el re-fetch saldría con la
+   * sucursal vieja del servidor y mostraría los datos de la sucursal anterior
+   * (bug reportado en Caja: al pasar a Tarija se veían los movimientos de Central).
+   *
+   * @param {number} id - ID de la sucursal destino (debe estar entre los accesos del usuario).
+   * @returns {Promise<void>}
+   */
   async function handleSelectSucursal(id) {
-    // Actualiza accent según el índice de la sucursal (igual que el legacy)
     const idx = sucursales.findIndex(s => s.id === id);
-    if (idx >= 0) setTweak('accent', SUC_COLORS[idx % SUC_COLORS.length]);
-
-    setTweak('sucursalId', id);
     try {
-      const r = await auth.switchSucursal(id);
+      const r = await auth.switchSucursal(id);   // 1) el servidor cambia users.sucursal_id
       setUser(r.data);
+      if (idx >= 0) setTweak('accent', SUC_COLORS[idx % SUC_COLORS.length]);
+      setTweak('sucursalId', id);                // 2) recién ahora se disparan los re-fetch
     } catch {
-      // Sin acceso: revierte color y sucursal
-      const prevIdx = sucursales.findIndex(s => s.id === user?.sucursal_id);
-      if (prevIdx >= 0) setTweak('accent', SUC_COLORS[prevIdx % SUC_COLORS.length]);
-      setTweak('sucursalId', user?.sucursal_id ?? id);
+      // Sin acceso (o fallo de red): no se toca el estado local, así que no hay
+      // nada que revertir; la sucursal y el color siguen como estaban.
     }
   }
 

@@ -110,9 +110,14 @@ class ProductoController extends Controller
                 'marca'       => $p->marca->nombre ?? '',
                 'industria'   => $p->industria->nombre ?? '',
                 'unidad'      => $p->unidad,
-                'p_comp'      => $verCosto ? number_format($p->p_comp, 2) : null,
-                'p_norm'      => number_format($p->p_norm, 2),
-                'p_fact'      => number_format($p->p_fact, 2),
+                // Precios como FLOAT crudo (no number_format): el front formatea para mostrar.
+                // number_format mete coma de miles ("2,505.00") y rompía dos cosas: el costo
+                // salía NaN en pantalla para valores >= 1000, y al EDITAR el producto ese
+                // string llegaba al backend como `(float)"2,505.00" = 2.0` → corrompía el
+                // costo guardado (bug reportado en modo admin). Ver Bug #1 del CLAUDE.md.
+                'p_comp'      => $verCosto ? (float) $p->p_comp : null,
+                'p_norm'      => (float) $p->p_norm,
+                'p_fact'      => (float) $p->p_fact,
                 'stock'       => $p->$stockCol,
                 'estado'      => $p->estado,
                 'stocks'      => $sucs->map(fn($s) => [
@@ -480,15 +485,25 @@ class ProductoController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'codigo'       => 'required|string|max:50|unique:productos,codigo',
-            'descripcion'  => 'required|string|max:255',
+            // SIN `unique`: el catálogo heredado tiene >1000 productos con código repetido
+            // (480 con "SIN CODIGO", "---", etc.) — duplicar código es normal en este negocio
+            // y el sistema legacy NUNCA lo exigió. `max:191` = tamaño real de la columna.
+            'codigo'       => 'required|string|max:191',
+            // `descripcion` es columna TEXT (sin tope práctico); 500 da margen para descripciones
+            // técnicas largas sin reventar (antes 255 cortaba pegados largos → 422 genérico).
+            'descripcion'  => 'required|string|max:500',
             'marca_id'     => 'required|integer|exists:marcas,id',
             'industria_id' => 'required|integer|exists:industrias,id',
             'unidad'       => 'nullable|string|max:10',
+            // Los precios faltantes se guardan en 0 (las columnas son NOT NULL): un alta sin
+            // algún precio reventaba el INSERT pese a marcarse "(opcional)" en el formulario.
             'p_comp'       => 'nullable|numeric|min:0',
             'p_norm'       => 'nullable|numeric|min:0',
             'p_fact'       => 'nullable|numeric|min:0',
         ]);
+        $data['p_comp'] = $request->filled('p_comp') ? (float) $request->p_comp : 0;
+        $data['p_norm'] = $request->filled('p_norm') ? (float) $request->p_norm : 0;
+        $data['p_fact'] = $request->filled('p_fact') ? (float) $request->p_fact : 0;
         $producto = Producto::create($data + ['estado' => 'ON']);
         return response()->json(['id' => $producto->id]);
     }
@@ -496,8 +511,11 @@ class ProductoController extends Controller
     public function update(Request $request, Producto $producto)
     {
         $data = $request->validate([
-            'codigo'       => 'required|string|max:50|unique:productos,codigo,' . $producto->id,
-            'descripcion'  => 'required|string|max:255',
+            // SIN `unique`: editar un producto cuyo código se repite en el catálogo heredado
+            // (>1000 casos, p. ej. marcas DFG/TECNOPARTS) fallaba con 422 al guardar. El legacy
+            // nunca exigió código único. `max:191` = tamaño real de la columna.
+            'codigo'       => 'required|string|max:191',
+            'descripcion'  => 'required|string|max:500',
             'marca_id'     => 'required|integer|exists:marcas,id',
             'industria_id' => 'required|integer|exists:industrias,id',
             'unidad'       => 'nullable|string|max:10',

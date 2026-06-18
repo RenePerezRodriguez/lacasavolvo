@@ -54,7 +54,9 @@ export function ToastProvider({ children }) {
   return (
     <_ToastCtx.Provider value={add}>
       {children}
-      <div style={{position:"fixed",bottom:20,right:20,zIndex:10000,display:"flex",flexDirection:"column",gap:8,pointerEvents:"none",maxWidth:360}}>
+      {/* Centrado ARRIBA (pedido de QA: los errores de guardado salían en una esquina
+          y pasaban desapercibidos; "que salga al medio central superior, visible"). */}
+      <div style={{position:"fixed",top:20,left:"50%",transform:"translateX(-50%)",zIndex:10000,display:"flex",flexDirection:"column",alignItems:"center",gap:8,pointerEvents:"none",maxWidth:420,width:"max-content"}}>
         {list.map(t => {
           const s = _TOAST_STYLE[t.type] || _TOAST_STYLE.error;
           return (

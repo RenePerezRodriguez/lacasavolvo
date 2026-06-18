@@ -40,6 +40,10 @@ export function Caja({ onNav, sucursalId, user, effectivePermissions }) {
   const [tipoMov, setTipoMov] = useState('INGRESO');
   const [monto, setMonto]     = useState('');
   const [desc, setDesc]       = useState('');
+  // Fecha del movimiento (por defecto hoy): el legacy permitía registrar un ingreso/gasto
+  // con fecha pasada (p. ej. cargar el gasto de ayer hoy). El backend la valida contra el
+  // último cierre. Formato YYYY-MM-DD para el <input type="date">.
+  const [fechaMov, setFechaMov] = useState(() => new Date().toISOString().slice(0, 10));
   const [montoApertura, setMontoApertura] = useState('');
   const [cerrandoConf, setCerrandoConf]   = useState(false);
   const [editingId, setEditingId]         = useState(null);
@@ -87,8 +91,8 @@ export function Caja({ onNav, sucursalId, user, effectivePermissions }) {
     if (!monto || !desc) return;
     setSaving(true);
     try {
-      if (tipoMov === 'INGRESO') await cajaApi.ingreso({ monto: parseFloat(monto), descripcion: desc });
-      else await cajaApi.egreso({ monto: parseFloat(monto), descripcion: desc });
+      if (tipoMov === 'INGRESO') await cajaApi.ingreso({ monto: parseFloat(monto), descripcion: desc, fecha: fechaMov });
+      else await cajaApi.egreso({ monto: parseFloat(monto), descripcion: desc, fecha: fechaMov });
       setMonto(''); setDesc('');
       cargar();
     } catch (err) {
@@ -300,8 +304,15 @@ export function Caja({ onNav, sucursalId, user, effectivePermissions }) {
               <label className="label">Concepto</label>
               <input className="input" value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Descripción del movimiento"/>
             </div>
+            <div className="field">
+              {/* Fecha editable (pedido de QA): permite cargar un movimiento con fecha pasada,
+                  como en el legacy. Por defecto es hoy. */}
+              <label className="label">Fecha</label>
+              <input className="input" type="date" value={fechaMov} max={new Date().toISOString().slice(0,10)}
+                onChange={e=>setFechaMov(e.target.value)}/>
+            </div>
             <Button variant="accent" icon="fa-check" style={{width:"100%"}}
-              disabled={saving || !monto || !desc} onClick={handleMovimiento}>
+              disabled={saving || !monto || !desc || !fechaMov} onClick={handleMovimiento}>
               {saving ? <><Icon name="fa-spinner fa-spin" style={{marginRight:6}}/>Registrando…</> : `Registrar ${tipoMov.toLowerCase()}`}
             </Button>
           </div>

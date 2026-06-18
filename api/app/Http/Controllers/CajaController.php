@@ -323,6 +323,10 @@ class CajaController extends Controller
         $request->validate([
             'monto'       => 'required|numeric|min:0.01',
             'descripcion' => 'nullable|string|max:500',
+            // Permite registrar el ingreso con una fecha (p. ej. cargar un gasto de ayer),
+            // como en el sistema legacy. Si no viene, es del día. El guard de periodo cerrado
+            // (abajo) impide fechar dentro de un cierre ya hecho.
+            'fecha'       => 'nullable|date',
         ]);
         $fecha = $request->fecha ?? Carbon::today()->toDateString();
         $sucursal = \App\Models\Sucursal::findOrFail(Auth::user()->sucursal_id);
@@ -347,6 +351,9 @@ class CajaController extends Controller
         $request->validate([
             'monto'       => 'required|numeric|min:0.01',
             'descripcion' => 'nullable|string|max:500',
+            // Permite registrar el egreso/gasto con fecha (p. ej. un gasto de ayer), como el
+            // legacy. Si no viene, es del día. El guard de periodo cerrado lo limita abajo.
+            'fecha'       => 'nullable|date',
         ]);
         $fecha = $request->fecha ?? Carbon::today()->toDateString();
         $sucursal = \App\Models\Sucursal::findOrFail(Auth::user()->sucursal_id);

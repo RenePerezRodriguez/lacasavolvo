@@ -117,6 +117,20 @@ export function VentaDetail({ ventaId, ventaData, onNav }) {
     return Array.from(m.values());
   }, [detalles]);
 
+  // Productos de la venta filtrados para la devolución. Se busca por código, descripción,
+  // marca Y por ID (#635 o 635) — antes solo matcheaba código/descripción, y el ID no
+  // servía (pedido de QA). El '#' inicial se ignora para que "#635" y "635" funcionen igual.
+  const devFiltrados = React.useMemo(() => {
+    const ql = devSearch.trim().toLowerCase().replace(/^#/, '');
+    if (!ql) return devProductos;
+    return devProductos.filter(d =>
+      (d.codigo || '').toLowerCase().includes(ql) ||
+      (d.descripcion || '').toLowerCase().includes(ql) ||
+      (d.marca || '').toLowerCase().includes(ql) ||
+      String(d.producto_id ?? d.id) === ql
+    );
+  }, [devProductos, devSearch]);
+
   // Datos del ítem seleccionado para devolver: costo unitario y cuánto queda por devolver
   // (cantidad vendida menos lo ya devuelto). Surface el límite antes de que el backend lo rechace.
   const devSel      = devProductos.find(d => String(d.producto_id ?? d.id) === String(devProdId));
@@ -199,27 +213,34 @@ export function VentaDetail({ ventaId, ventaData, onNav }) {
                 </div>
               </div>
 
+              {/* Código y Marca en COLUMNAS propias (pedido de QA: antes iban amontonados
+                  bajo la descripción). Los códigos OE.xxxx siguen dentro de la descripción
+                  porque en la BD son texto libre del campo `descripcion`, no columnas. */}
               <table className="tbl minimal" style={{marginBottom:20}}>
                 <thead>
                   <tr>
-                    <th style={{width:36}}>#</th>
+                    <th style={{width:30}}>#</th>
+                    <th style={{width:140}}>Código</th>
                     <th>Descripción</th>
-                    <th className="center" style={{width:80}}>Cant.</th>
-                    <th className="right" style={{width:110}}>P. Unit.</th>
-                    <th className="right" style={{width:130}}>Subtotal</th>
+                    <th style={{width:110}}>Marca</th>
+                    <th className="center" style={{width:64}}>Cant.</th>
+                    <th className="right" style={{width:100}}>P. Unit.</th>
+                    <th className="right" style={{width:120}}>Subtotal</th>
                   </tr>
                 </thead>
                 <tbody>
                   {detalles.length === 0 && (
-                    <tr><td colSpan="5"><Empty text="Sin ítems" icon="fa-cubes"/></td></tr>
+                    <tr><td colSpan="7"><Empty text="Sin ítems" icon="fa-cubes"/></td></tr>
                   )}
                   {detalles.map((it, i) => (
                     <tr key={it.id}>
                       <td className="mono" style={{color:"var(--soft)"}}>{String(i+1).padStart(2,"0")}</td>
-                      <td>
-                        <div style={{fontWeight:600, color:"var(--ink)"}}>{it.descripcion}</div>
-                    <div className="mono" style={{fontSize:10.5, color:"var(--soft)", marginTop:2}}>#{it.producto_id ?? it.id} · {it.codigo} · {it.marca}</div>
+                      <td className="mono" style={{fontSize:11, whiteSpace:"nowrap"}}>
+                        <span style={{fontWeight:700, color:"var(--accent)", display:"block"}}>{it.codigo || '—'}</span>
+                        <span style={{fontSize:10, color:"var(--soft)"}}>#{it.producto_id ?? it.id}</span>
                       </td>
+                      <td><div style={{fontWeight:600, color:"var(--ink)"}}>{it.descripcion}</div></td>
+                      <td style={{fontSize:11, color:"var(--soft)"}}>{it.marca || '—'}</td>
                       <td className="center mono tabular">{it.cantidad}</td>
                       <td className="right mono tabular">Bs {parseFloat(it.costo).toFixed(2)}</td>
                       <td className="right mono tabular strong">{it.subtotal}</td>
@@ -297,25 +318,43 @@ export function VentaDetail({ ventaId, ventaData, onNav }) {
               {estado === 'VALIDO' && (
                 showDev ? (
                   <div style={{padding:14, borderTop: devoluciones.length > 0 ? '1px solid var(--line)' : undefined}}>
-                    <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'flex-end'}}>
-                      <div className="field" style={{marginBottom:0, flex:1, minWidth:160}}>
-                        <label className="label" style={{fontSize:10}}>Producto devuelto</label>
-                        {devProductos.length > 4 && (
-                          <input className="input" placeholder="Buscar código o descripción…" value={devSearch}
-                            onChange={e=>setDevSearch(e.target.value)} style={{fontSize:11, marginBottom:6}}/>
-                        )}
-                        <select className="input" value={devProdId} onChange={e=>{setDevProdId(e.target.value); setDevCant(1);}} style={{fontSize:12}}>
-                          <option value="">Seleccionar…</option>
-                          {devProductos
-                            .filter(d => { const ql = devSearch.trim().toLowerCase(); return !ql || (d.codigo||'').toLowerCase().includes(ql) || (d.descripcion||'').toLowerCase().includes(ql); })
-                            .map(d => <option key={d.producto_id ?? d.id} value={d.producto_id ?? d.id}>{d.codigo ? `${d.codigo} · ` : ''}{d.descripcion}</option>)}
-                        </select>
-                      </div>
-                      <div className="field" style={{marginBottom:0, width:90}}>
+                    {/* Buscador SIEMPRE visible (antes solo aparecía con >4 ítems) + lista en
+                        COLUMNAS clickeable en vez del <select> (pedido de QA: era incómodo). */}
+                    <div className="field" style={{marginBottom:10}}>
+                      <label className="label" style={{fontSize:10}}>Buscar producto a devolver — código, ID o descripción</label>
+                      <input className="input" placeholder="Ej: 71-3921, #635 o COJINETE…" value={devSearch}
+                        autoFocus onChange={e=>setDevSearch(e.target.value)} style={{fontSize:12}}/>
+                    </div>
+                    <div style={{maxHeight:210, overflowY:'auto', border:'1px solid var(--line)', borderRadius:'var(--r-md)'}}>
+                      {devFiltrados.length === 0 ? (
+                        <div style={{padding:14, fontSize:12, color:'var(--soft)', textAlign:'center'}}>Sin coincidencias</div>
+                      ) : devFiltrados.map(d => {
+                        const pid  = String(d.producto_id ?? d.id);
+                        const sel  = pid === String(devProdId);
+                        const ya   = devoluciones.filter(x => String(x.producto_id) === pid).reduce((s, x) => s + Number(x.cantidad || 0), 0);
+                        const disp = Number(d.cantidad) - ya;
+                        return (
+                          <button key={pid} type="button" disabled={disp <= 0}
+                            onClick={()=>{ setDevProdId(pid); setDevCant(1); }}
+                            style={{display:'grid', gridTemplateColumns:'minmax(120px,auto) 1fr auto', gap:10, alignItems:'center',
+                              width:'100%', textAlign:'left', padding:'8px 10px', border:'none', borderBottom:'1px solid var(--line)',
+                              cursor: disp > 0 ? 'pointer' : 'not-allowed', background: sel ? 'var(--accent-soft)' : 'transparent', opacity: disp > 0 ? 1 : 0.5}}>
+                            <span className="mono" style={{fontSize:11, fontWeight:700, color:'var(--accent)', whiteSpace:'nowrap'}}>#{pid} · {d.codigo || '—'}</span>
+                            <span style={{fontSize:12, color:'var(--ink)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                              {d.descripcion}{d.marca ? <span style={{color:'var(--soft)', marginLeft:6, fontSize:10}}>{d.marca}</span> : null}
+                            </span>
+                            <span className="mono" style={{fontSize:10.5, fontWeight:700, color: disp > 0 ? 'var(--ink)' : 'var(--danger)', whiteSpace:'nowrap'}}>{disp} disp.</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'flex-end', marginTop:10}}>
+                      <div className="field" style={{marginBottom:0, width:110}}>
                         <label className="label" style={{fontSize:10}}>Cantidad</label>
-                        <input className="input mono" type="number" min={1} max={devMax || 1} value={devCant} onChange={e=>setDevCant(e.target.value)} style={{textAlign:'center'}}/>
+                        <input className="input mono" type="number" min={1} max={devMax || 1} value={devCant} disabled={!devProdId}
+                          onChange={e=>setDevCant(e.target.value)} style={{textAlign:'center'}}/>
                       </div>
-                      <Button variant="accent" size="sm" disabled={devInvalido||saving} onClick={handleDev}>Registrar</Button>
+                      <Button variant="accent" size="sm" disabled={devInvalido||saving} onClick={handleDev}>Registrar devolución</Button>
                       <Button variant="ghost" size="sm" onClick={()=>{setShowDev(false);setDevProdId('');setDevCant(1);setDevSearch('');}}>Cancelar</Button>
                     </div>
                     {devSel && (

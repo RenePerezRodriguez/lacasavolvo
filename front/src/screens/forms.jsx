@@ -300,9 +300,13 @@ export function EnvioEncabezadoModal({ envio, onClose, onSaved }) {
   const [mediosList, setMediosList] = useState([]);
   const [saving, setSaving]         = useState(false);
   const [errors, setErrors]         = useState({});
-  const cuentaRef = useRef();
+  // Destino y medio son selects CONTROLADOS inicializados al valor guardado: sus
+  // opciones se cargan async y un `defaultValue` (no controlado) se reseteaba a la
+  // primera opción al llegar las opciones → el encabezado perdía el destino/medio
+  // guardado (bug reportado: un envío a Tarija aparecía como Montero al editar).
+  const [cuentaId, setCuentaId] = useState(String(envio.cuenta_id ?? ''));
+  const [medioId,  setMedioId]  = useState(String(envio.medio_id ?? ''));
   const fechaRef  = useRef();
-  const medioRef  = useRef();
   const montoRef  = useRef();
   const pagadoRef = useRef();
 
@@ -317,15 +321,15 @@ export function EnvioEncabezadoModal({ envio, onClose, onSaved }) {
   }, []);
 
   const handleSubmit = async () => {
-    if (!medioRef.current?.value) { setErrors({ medio: 'Selecciona un medio de transporte' }); return; }
+    if (!medioId) { setErrors({ medio: 'Selecciona un medio de transporte' }); return; }
     setErrors({});
     setSaving(true);
     try {
       await enviosApi.updateEncabezado({
         envio_id:  envio.id,
-        cuenta_id: cuentaRef.current.value,
+        cuenta_id: cuentaId,
         fecha:     fechaRef.current.value,
-        medio_id:  medioRef.current.value,
+        medio_id:  medioId,
         monto:     montoRef.current.value || 0,
         pagado:    pagadoRef.current.value,
       });
@@ -345,9 +349,11 @@ export function EnvioEncabezadoModal({ envio, onClose, onSaved }) {
       <div className="stack" style={{"--gap":"14px"}}>
         <div className="field">
           <label className="label">Destino (sucursal) <R/></label>
-          <select className="input" ref={cuentaRef} defaultValue={envio.cuenta_id}>
+          <select className="input" value={cuentaId} onChange={e => setCuentaId(e.target.value)}>
+            {/* La opción del valor guardado se mantiene aunque la lista aún cargue,
+                para que el select controlado nunca quede sin opción que lo respalde. */}
             {destinos.length === 0
-              ? <option value={envio.cuenta_id}>Cargando…</option>
+              ? <option value={cuentaId}>Cargando…</option>
               : destinos.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
           </select>
         </div>
@@ -356,7 +362,8 @@ export function EnvioEncabezadoModal({ envio, onClose, onSaved }) {
             <input className="input" type="date" ref={fechaRef} defaultValue={envio.fecha_raw}/>
           </div>
           <div className="field"><label className="label">Medio de transporte <R/></label>
-            <select className="input" ref={medioRef} defaultValue={envio.medio_id ?? ''} style={errStyle(errors.medio)} onChange={() => errors.medio && setErrors({})}>
+            <select className="input" value={medioId} style={errStyle(errors.medio)}
+              onChange={e => { setMedioId(e.target.value); if (errors.medio) setErrors({}); }}>
               <option value="">Seleccionar medio…</option>
               {mediosList.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
             </select>
@@ -456,6 +463,98 @@ export function CotizacionFormModal({ onClose, onSaved }) {
   );
 }
 
+/**
+ * Modal para EDITAR el encabezado de una cotización existente: cliente, fecha y
+ * observación. El sistema legacy tenía esta edición (y la observación, donde se
+ * anotaban nombre/teléfono del cliente cuando la cuenta era genérica "SIN NOMBRE");
+ * el sistema nuevo la había perdido (regresión de QA). El `descuento` actual se
+ * REENVÍA para no resetearlo (el backend lo pone en 0 si no llega).
+ *
+ * @param {object} props
+ * @param {object} props.cotizacion - Cotización a editar (id, cuenta_id, cuenta, fecha_raw, observacion, descuento).
+ * @param {function(): void} props.onClose - Cierra el modal.
+ * @param {function(): void} [props.onSaved] - Callback tras guardar (para recargar el encabezado).
+ * @returns {JSX.Element}
+ */
+export function CotizacionEncabezadoModal({ cotizacion, onClose, onSaved }) {
+  const toast = useToast();
+  const [cliente, setCliente] = useState(
+    cotizacion.cuenta_id ? { id: cotizacion.cuenta_id, nombre: cotizacion.cuenta, nit: cotizacion.nit } : null
+  );
+  const [showCliente, setShowCliente] = useState(false);
+  const [saving, setSaving]           = useState(false);
+  const [errors, setErrors]           = useState({});
+  const fechaRef = useRef();
+  const obsRef   = useRef();
+
+  const handleSubmit = async () => {
+    if (!cliente?.id) { setErrors({ cliente: 'Selecciona un cliente' }); return; }
+    setErrors({});
+    setSaving(true);
+    try {
+      await cotizApi.updateEncabezado({
+        cotizacion_id: cotizacion.id,
+        cuenta_id:     cliente.id,
+        fecha:         fechaRef.current.value,
+        observacion:   obsRef.current.value,
+        descuento:     cotizacion.descuento ?? 0,  // preservar el descuento actual
+      });
+      toast('Encabezado actualizado', 'success');
+      onSaved && onSaved();
+      onClose();
+    } catch (err) {
+      const d = err?.response?.data;
+      toast(d?.error || d?.message || 'Error al actualizar el encabezado', 'error');
+      logger.error(err);
+    }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <FormModal title="Editar encabezado" subtitle={`Cotización #${cotizacion.id}`} icon="fa-pen"
+      onClose={onClose} onSubmit={handleSubmit} submitLabel={saving ? "Guardando…" : "Guardar cambios"}>
+      <div className="stack" style={{"--gap":"14px"}}>
+        <div>
+          <Card title={<>Cliente <R/></>} head={
+            <div className="row" style={{gap:6}}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowCliente(!showCliente)}>
+                <Icon name="fa-search" style={{fontSize:10}}/>{cliente ? "Cambiar" : "Buscar"}
+              </button>
+            </div>
+          }>
+            {cliente ? (
+              <div>
+                <div style={{fontSize:14, fontWeight:700, color:"var(--ink)"}}>{cliente.nombre}</div>
+                {cliente.nit && <div className="mono" style={{fontSize:11, color:"var(--soft)", marginTop:2}}>NIT {cliente.nit}</div>}
+              </div>
+            ) : (
+              <div style={{color: errors.cliente ? "var(--danger)" : "var(--soft)", fontSize:12, textAlign:"center", padding:"8px 0"}}>Sin cliente seleccionado</div>
+            )}
+            {showCliente && (
+              <div style={{marginTop:12, paddingTop:12, borderTop:"1px solid var(--line)"}}>
+                <AccountSearchInput
+                  onSelect={(c) => { setCliente(c); setShowCliente(false); setErrors(prev => ({...prev, cliente:''})); }}
+                  placeholder="Buscar cliente…"
+                  showSinNombre={true}
+                  take={5}
+                  autoFocus={true}
+                />
+              </div>
+            )}
+          </Card>
+          <FieldErr msg={errors.cliente}/>
+        </div>
+        <div className="field"><label className="label">Fecha</label>
+          <input className="input" type="date" ref={fechaRef} defaultValue={cotizacion.fecha_raw}/>
+        </div>
+        <div className="field"><label className="label">Observación <span style={{fontSize:10,color:"var(--soft)",fontWeight:400}}>(opcional)</span></label>
+          <textarea className="input" rows="3" maxLength={191} ref={obsRef} defaultValue={cotizacion.observacion ?? ''} placeholder="Nombre/teléfono del cliente, términos, vigencia…"></textarea>
+        </div>
+      </div>
+    </FormModal>
+  );
+}
+
 /* ═══════════ PRODUCTO ═══════════ */
 export function ProductoFormModal({ onClose, onSaved, edit }) {
   const toast = useToast();
@@ -525,7 +624,11 @@ export function ProductoFormModal({ onClose, onSaved, edit }) {
       onSaved && onSaved();
       onClose();
     } catch (err) {
-      toast(err?.response?.data?.error || 'Error al guardar el producto', 'error');
+      // Mostrar el MOTIVO REAL: Laravel 422 trae los errores por campo en `errors`
+      // (antes siempre salía el genérico "Error al guardar" y no se sabía qué corregir).
+      const d = err?.response?.data;
+      const motivo = d?.errors ? Object.values(d.errors).flat()[0] : (d?.error || d?.message);
+      toast(motivo || 'Error al guardar el producto', 'error');
       logger.error(err);
     }
     finally { setSaving(false); }
@@ -1231,7 +1334,7 @@ export function NombreFormModal({ onClose, onSaved, edit, label, icon, onSave })
 Object.assign(window, {
   FormModal,
   CompraFormModal, PedidoFormModal, EnvioFormModal, EnvioEncabezadoModal,
-  CotizacionFormModal, ProductoFormModal, CuentaFormModal,
+  CotizacionFormModal, CotizacionEncabezadoModal, ProductoFormModal, CuentaFormModal,
   SucursalFormModal, UsuarioFormModal, RolFormModal,
   MedioFormModal, NombreFormModal,
 });

@@ -102,9 +102,11 @@ const STATUS_TONE = {
  * @param {string} props.value - Valor del estado (ej: "VALIDO", "PROFORMA").
  * @returns {JSX.Element}
  */
-export function StatusBadge({ value }) {
+export function StatusBadge({ value, label }) {
   const tone = STATUS_TONE[value] || "neutral";
-  return <Badge tone={tone} dot>{value}</Badge>;
+  // `label` permite mostrar un texto distinto al estado real (mismo color): p. ej.
+  // en cotizaciones "VALIDO" se muestra como "VIGENTE" para no confundirlo con una venta.
+  return <Badge tone={tone} dot>{label ?? value}</Badge>;
 }
 
 

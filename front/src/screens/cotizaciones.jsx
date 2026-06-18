@@ -6,8 +6,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useListData, useColumnVisibility } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
 import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper } from '../lib/components.jsx';
-import { CotizacionFormModal } from './forms.jsx';
+import { CotizacionFormModal, CotizacionEncabezadoModal } from './forms.jsx';
 import { openPdf, cotizaciones as cotizApi } from '../services/api.js';
+
+/**
+ * Etiquetas de estado propias de cotizaciones: una cotización es una PROFORMA, no una
+ * venta, así que "VALIDO" se muestra como "VIGENTE" para no confundir (pedido de QA:
+ * usuarios creían que una cotización "VALIDO" ya era una venta cerrada). El valor real
+ * en la BD/filtros sigue siendo VALIDO/ANULADO/CONVERTIDA.
+ */
+const COTIZ_ESTADO_LABEL = { VALIDO: 'VIGENTE', ANULADO: 'ANULADA', CONVERTIDA: 'CONVERTIDA' };
 
 /**
  * Listado paginado de cotizaciones con KPIs y opción de convertir a venta.
@@ -65,7 +73,7 @@ export function Cotizaciones({ onNav, sucursalId, user, effectivePermissions }) 
     { key: 'fecha', title: 'Fecha', width: 120, sortable: true, render: c => <span className="num">{c.fecha}</span> },
     { key: 'cuenta', title: 'Cliente', sortable: true, render: c => <span className="strong">{c.cuenta}</span> },
     { key: 'total', title: 'Total', width: 160, align: 'right', sortable: true, render: c => <span className="mono tabular strong">{c.total}</span> },
-    { key: 'estado', title: 'Estado', width: 120, sortable: true, render: c => <StatusBadge value={c.estado}/> },
+    { key: 'estado', title: 'Estado', width: 120, sortable: true, render: c => <StatusBadge value={c.estado} label={COTIZ_ESTADO_LABEL[c.estado]}/> },
     { key: 'sucursal', title: 'Sucursal', width: 120, defaultHidden: true, render: c => <Badge tone="neutral" outline>{c.sucursal || '—'}</Badge> },
     { key: 'actions', title: 'Acciones', width: 120, align: 'right', render: c => (
       <div className="actions">
@@ -116,7 +124,9 @@ export function Cotizaciones({ onNav, sucursalId, user, effectivePermissions }) 
             <div className="filter-label">Estado</div>
             <div className="seg-tabs">
               {["TODOS","VALIDO","ANULADO"].map(e => (
-                <button key={e} className={`seg ${estado === e ? "active" : ""}`} onClick={()=>{setEstado(e); setSkip(0);}}>{e[0]+e.slice(1).toLowerCase()}</button>
+                <button key={e} className={`seg ${estado === e ? "active" : ""}`} onClick={()=>{setEstado(e); setSkip(0);}}>
+                  {e === "TODOS" ? "Todos" : (COTIZ_ESTADO_LABEL[e]?.[0] ?? e[0]) + (COTIZ_ESTADO_LABEL[e]?.slice(1).toLowerCase() ?? e.slice(1).toLowerCase())}
+                </button>
               ))}
             </div>
           </div>
@@ -176,6 +186,7 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
   const [converting, setConverting] = useState(false);
   const [c, setC]                   = useState(cotizacionData ?? null);
   const [error, setError]           = useState(null);
+  const [showEditEnc, setShowEditEnc] = useState(false); // modal editar encabezado
 
   useEffect(() => {
     setLoading(true);
@@ -187,6 +198,8 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
 
 
   async function reload() { const r = await cotizApi.detalles(cotizacionId); setDetalles(r.data ?? []); }
+  /** Recarga solo el encabezado (cliente/fecha/observación) tras editarlo. */
+  async function reloadHeader() { const r = await cotizApi.show(cotizacionId); setC(prev => ({ ...prev, ...r.data })); }
 
   /**
    * Agrega un producto a la cotización y recarga los detalles.
@@ -293,10 +306,12 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
       <PageHead title={`Cotización #${cotizacionId}`} sub={`${c?.cuenta??'—'} · ${c?.fecha??'—'}`}
         actions={<>
           <Button variant="ghost" icon="fa-arrow-left" size="sm" onClick={()=>onNav('cotizaciones')}>Volver</Button>
+          {editable && <Button variant="secondary" icon="fa-pen" size="sm" onClick={()=>setShowEditEnc(true)}>Editar encabezado</Button>}
           <PdfButton onPdf={() => openPdf(`/cotizaciones/${cotizacionId}/pdf`)} />
           {editable && <Button variant="ghost" icon="fa-ban" size="sm" style={{color:"var(--danger)"}} disabled={saving} onClick={handleAnular}>Anular</Button>}
         </>}
       />
+      {showEditEnc && c && <CotizacionEncabezadoModal cotizacion={c} onClose={()=>setShowEditEnc(false)} onSaved={reloadHeader}/>}
       {error && <div style={{padding:"10px 14px",background:"var(--danger-soft)",border:"1px solid rgba(220,38,38,.25)",borderRadius:"var(--r-md)",fontSize:13,color:"var(--danger)",display:"flex",gap:8,alignItems:"center"}}><Icon name="fa-circle-exclamation" style={{fontSize:12,flexShrink:0}}/><span>{error}</span></div>}
       <div className="grid-12">
         <div className="stack" style={{"--gap":"16px"}}>
@@ -317,7 +332,7 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
                 <Badge tone="neutral">{detalles.length}</Badge>
                 {saving && <Icon name="fa-spinner fa-spin" style={{fontSize:12,color:"var(--soft)"}}/>}
               </div>
-              <StatusBadge value={estado}/>
+              <StatusBadge value={estado} label={COTIZ_ESTADO_LABEL[estado]}/>
             </div>
             {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-file-invoice"/> : (
               <table className="tbl">
@@ -432,6 +447,16 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
               <div className="row" style={{justifyContent:"space-between",fontSize:13}}>
                 <span style={{fontWeight:700,color:"var(--ink)"}}>Total</span>
                 <span style={{fontWeight:700,color:"var(--ink)"}}>Bs {totalNum.toFixed(2)}</span>
+              </div>
+              {/* Observación: el legacy guardaba aquí datos del cliente (nombre/teléfono)
+                  cuando la cuenta era genérica "SIN NOMBRE". Se muestra siempre para que
+                  esos datos no queden ocultos (regresión de QA). */}
+              <div style={{height:1,background:"var(--line)",margin:"4px 0"}}></div>
+              <div style={{fontSize:12}}>
+                <span style={{color:"var(--soft)"}}>Observación</span>
+                <div style={{marginTop:4, color: c?.observacion ? "var(--ink)" : "var(--soft)", fontWeight:500, whiteSpace:"pre-wrap", lineHeight:1.4}}>
+                  {c?.observacion || 'Sin observación'}
+                </div>
               </div>
             </div>
           </Card>

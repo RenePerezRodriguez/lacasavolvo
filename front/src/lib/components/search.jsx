@@ -165,8 +165,15 @@ export function SearchModal({ onClose, onNav, onProductClick, effectivePermissio
                   </span>
                 );
                 const precio = (
-                  // Precios de venta (QA): c/f = con factura (p_fact) · s/f = sin factura (p_norm). Costo NO.
+                  // Precios de venta (QA): c/f = con factura (p_fact) · s/f = sin factura (p_norm).
+                  // El COSTO (p_comp) se muestra SOLO para admin/gerente (pedido de QA): el backend
+                  // ya lo manda null para el resto de roles, así que basta con chequear != null.
                   <span style={{display:"flex", flexDirection:"column", alignItems:"flex-end", flexShrink:0, lineHeight:1.25, minWidth: compact ? 0 : 96}}>
+                    {p.p_comp != null && (
+                      <span className="mono" style={{fontSize:10.5, fontWeight:700, color:"var(--accent)", whiteSpace:"nowrap"}}>
+                        Bs {Number(p.p_comp).toFixed(2)} <span style={{fontSize:8, fontWeight:700}}>costo</span>
+                      </span>
+                    )}
                     <span className="mono" style={{fontSize:12.5, fontWeight:700, color:"var(--ink)", whiteSpace:"nowrap"}}>
                       Bs {Number(p.p_fact ?? 0).toFixed(2)} <span style={{fontSize:8.5, color:"var(--soft)", fontWeight:700}}>c/f</span>
                     </span>

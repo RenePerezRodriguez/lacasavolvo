@@ -146,6 +146,10 @@ class CotizacionController extends Controller
             'fecha'     => $cotizacion->fecha->format('d/m/Y'),
             'fecha_raw' => $cotizacion->fecha->format('Y-m-d'),
             'estado'    => $cotizacion->estado,
+            // `observacion` faltaba en la respuesta → el detalle no podía mostrar los datos
+            // del cliente/notas que el legacy SÍ guardaba ahí (nombre, teléfono, etc.). Sin
+            // esto, cotizaciones con cliente "SIN NOMBRE" parecían vacías (regresión de QA).
+            'observacion' => $cotizacion->observacion,
             'monto'     => (float) $cotizacion->monto,
             'descuento' => (float) $cotizacion->descuento,
             'total'     => 'Bs. ' . number_format($cotizacion->total, 2),

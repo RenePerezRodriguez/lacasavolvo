@@ -11,6 +11,15 @@ import { ProductoFormModal } from './forms.jsx';
 import { productos as prodApi } from '../services/api.js';
 
 /**
+ * Formatea un número como monto en Bolivianos (2 decimales, separador local es-BO).
+ * Los precios llegan de la API como float crudo; el formateo de miles/decimales se
+ * hace acá (no en el backend con number_format, que rompía el parseo al editar).
+ * @param {number|string} v - Valor numérico (o casteable) a formatear.
+ * @returns {string} Monto con 2 decimales, p. ej. "2.505,00".
+ */
+const money = (v) => Number(v ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
  * Listado paginado de productos con KPIs de inventario, búsqueda y formulario de edición.
  * @param {object} props
  * @param {function(string|object): void} props.onNav - Navegación.
@@ -49,14 +58,16 @@ export function Productos({ onNav, sucursalId, user, effectivePermissions }) {
     { key: 'descripcion', title: 'Descripción', sortable: true, className: 'strong' },
     { key: 'marca', title: 'Marca', sortable: true, width: 120, render: p => <Badge tone="neutral" outline>{p.marca}</Badge> },
     { key: 'industria', title: 'Industria', sortable: true, width: 120, render: p => <span style={{fontSize:12, color:"var(--soft)"}}>{p.industria}</span> },
-    { key: 'p_norm', title: 'P. Normal', sortable: true, width: 110, className: 'right mono tabular', render: p => `Bs ${p.p_norm}` },
-    { key: 'p_fact', title: 'P. Factura', sortable: true, width: 110, className: 'right mono tabular strong', render: p => `Bs ${p.p_fact}` },
+    // El COSTO va ANTES de los precios de venta (pedido de QA: para gerente/admin el
+    // costo es la referencia principal). Solo visible para quien puede ver costos.
     ...(showCosto ? [{
       key: 'costo', title: 'Costo', sortable: true, width: 110, className: 'right',
       render: p => p.p_comp > 0
-        ? <span className="mono tabular" style={{fontWeight:600}}>Bs {Number(p.p_comp).toLocaleString(undefined,{minimumFractionDigits:2})}</span>
+        ? <span className="mono tabular" style={{fontWeight:600}}>Bs {money(p.p_comp)}</span>
         : <span style={{color:"var(--soft)"}}>—</span>
     }] : []),
+    { key: 'p_norm', title: 'P. Normal', sortable: true, width: 110, className: 'right mono tabular', render: p => `Bs ${money(p.p_norm)}` },
+    { key: 'p_fact', title: 'P. Factura', sortable: true, width: 110, className: 'right mono tabular strong', render: p => `Bs ${money(p.p_fact)}` },
     { key: 'stock', title: 'Stock', sortable: true, width: sucursalId === 1 ? 180 : 80, className: 'center', render: p => {
         // Colores uniformes (observación de QA): > 0 negro, = 0 rojo. Sin escalón naranja
         // intermedio — había saldos > 0 que salían en rojo y confundían. El umbral "stock
@@ -207,15 +218,16 @@ export function Productos({ onNav, sucursalId, user, effectivePermissions }) {
                 <div style={{padding:"8px 12px", borderTop:"1px solid var(--line)",
                   display:"flex", justifyContent:"space-between", alignItems:"center"}}>
                   <div>
+                    {/* Costo primero (pedido de QA: referencia principal para gerente/admin). */}
+                    {showCosto && p.p_comp > 0 && (
+                      <div className="mono tabular" style={{fontSize:10, color:"var(--soft)"}}>costo Bs {money(p.p_comp)}</div>
+                    )}
                     <div className="mono tabular" style={{fontSize:15, fontWeight:700, color:"var(--ink)"}}>
-                      Bs {p.p_fact} <span style={{fontSize:9, fontWeight:600, color:"var(--soft)"}}>c/f</span>
+                      Bs {money(p.p_fact)} <span style={{fontSize:9, fontWeight:600, color:"var(--soft)"}}>c/f</span>
                     </div>
                     <div className="mono tabular" style={{fontSize:11, color:"var(--soft)"}}>
-                      Bs {p.p_norm} <span style={{fontSize:9, fontWeight:600}}>s/f</span>
+                      Bs {money(p.p_norm)} <span style={{fontSize:9, fontWeight:600}}>s/f</span>
                     </div>
-                    {showCosto && p.p_comp > 0 && (
-                      <div className="mono tabular" style={{fontSize:10, color:"var(--soft)"}}>costo Bs {p.p_comp}</div>
-                    )}
                   </div>
                   <div style={{display:"flex", alignItems:"center", gap:6}}>
                     <span className="mono tabular" style={{fontSize:11, color:"var(--soft)"}}>{p.stock} uds</span>

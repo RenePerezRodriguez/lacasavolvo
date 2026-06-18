@@ -28,8 +28,12 @@ class ModulesCoverageTest extends TestCase
         $this->assertEquals(10, Producto::find($producto->id)->stock1, 'Validar pedido NO debe tocar stock');
     }
 
-    public function test_producto_codigo_duplicado_se_rechaza(): void
+    public function test_producto_codigo_duplicado_se_permite(): void
     {
+        // El catálogo heredado tiene >1000 productos con código repetido (480 con "SIN CODIGO",
+        // 134 con "---", etc.) y el sistema legacy NUNCA exigió código único. Crear/editar un
+        // producto con código duplicado debe ACEPTARSE: la regla `unique` rompía la edición de
+        // esos productos (422 genérico reportado en QA con marcas DFG/TECNOPARTS).
         $this->actingAsUser('ADMIN');
         $marca = Marca::factory()->create();
         $industria = Industria::factory()->create();
@@ -37,7 +41,9 @@ class ModulesCoverageTest extends TestCase
 
         $this->postJson('/api/productos', [
             'codigo' => 'DUP-001', 'descripcion' => 'Otro', 'marca_id' => $marca->id, 'industria_id' => $industria->id,
-        ])->assertStatus(422)->assertJsonValidationErrorFor('codigo');
+        ])->assertStatus(200);
+
+        $this->assertEquals(2, Producto::where('codigo', 'DUP-001')->count(), 'El código duplicado debe permitirse (paridad con el legacy)');
     }
 
     public function test_producto_update_conserva_precios_si_no_se_envian(): void
