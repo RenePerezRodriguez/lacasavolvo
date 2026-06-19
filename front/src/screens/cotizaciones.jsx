@@ -10,12 +10,14 @@ import { CotizacionFormModal, CotizacionEncabezadoModal } from './forms.jsx';
 import { openPdf, cotizaciones as cotizApi } from '../services/api.js';
 
 /**
- * Etiquetas de estado propias de cotizaciones: una cotización es una PROFORMA, no una
- * venta, así que "VALIDO" se muestra como "VIGENTE" para no confundir (pedido de QA:
- * usuarios creían que una cotización "VALIDO" ya era una venta cerrada). El valor real
- * en la BD/filtros sigue siendo VALIDO/ANULADO/CONVERTIDA.
+ * Etiquetas de estado propias de cotizaciones: una cotización ES una PROFORMA (un
+ * presupuesto), no una venta. En la BD el estado es VALIDO (no existe un estado
+ * "proforma"/"borrador" — verificado contra prod y la base legacy), pero "VALIDO"
+ * confundía al equipo (parecía venta cerrada), así que el activo se MUESTRA como
+ * "PROFORMA". Al convertirse en venta pasa a CONVERTIDA; si se cancela, ANULADA.
+ * El valor real en la BD/filtros sigue siendo VALIDO/ANULADO/CONVERTIDA.
  */
-const COTIZ_ESTADO_LABEL = { VALIDO: 'VIGENTE', ANULADO: 'ANULADA', CONVERTIDA: 'CONVERTIDA' };
+const COTIZ_ESTADO_LABEL = { VALIDO: 'PROFORMA', ANULADO: 'ANULADA', CONVERTIDA: 'CONVERTIDA' };
 
 /**
  * Listado paginado de cotizaciones con KPIs y opción de convertir a venta.

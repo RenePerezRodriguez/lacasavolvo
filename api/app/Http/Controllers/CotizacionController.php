@@ -30,11 +30,14 @@ class CotizacionController extends Controller
             if (is_numeric($raw)) {
                 $q->where('cotizacions.id', (int)$raw);
             } else {
+                // Búsqueda por texto: nombre de cliente u observación (ahí va el dato real
+                // del cliente cuando la cuenta es genérica). Se quitó `orWhere('tipo')`: esa
+                // columna NO existe en `cotizacions` → buscar por texto reventaba con SQL 1054
+                // (Unknown column 'tipo') → 500. Verificado contra el esquema real de prod.
                 $like = '%' . $raw . '%';
                 $q->where(function ($q) use ($like) {
                     $q->whereHas('cuenta', fn($q) => $q->where('nombre', 'like', $like))
-                      ->orWhere('observacion', 'like', $like)
-                      ->orWhere('tipo', 'like', $like);
+                      ->orWhere('observacion', 'like', $like);
                 });
             }
         }

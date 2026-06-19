@@ -22,6 +22,21 @@ class CotizacionesTest extends TestCase
         $response->assertStatus(200)->assertJsonStructure(['total', 'data']);
     }
 
+    public function test_busqueda_por_texto_no_revienta(): void
+    {
+        // Regresión: el buscador hacía orWhere('tipo') sobre una columna INEXISTENTE en
+        // `cotizacions` → buscar por texto (no numérico) tiraba 500 (SQL 1054). Debe dar 200
+        // y matchear por nombre de cliente u observación.
+        $user = $this->actingAsUser();
+        $cuenta = Cuenta::factory()->cliente()->create(['nombre' => 'JUAN PEREZ']);
+        Cotizacion::factory()->create([
+            'sucursal_id' => $user->sucursal_id, 'cuenta_id' => $cuenta->id, 'observacion' => 'kit td122',
+        ]);
+
+        $this->getJson('/api/cotizaciones?search=JUAN')->assertStatus(200);
+        $this->getJson('/api/cotizaciones?search=td122')->assertStatus(200);
+    }
+
     public function test_store_crea_cotizacion_y_devuelve_id(): void
     {
         $user = $this->actingAsUser();
