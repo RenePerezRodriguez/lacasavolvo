@@ -16,6 +16,43 @@ import { Sucursales, Usuarios, Roles, Perfil, Marcas, Industrias, Medios, Empres
 import { Estadisticas } from './screens/estadisticas.jsx';
 import { auth, sucursales as sucursalesApi, roles as rolesApi, users as usersApi } from './services/api.js';
 import { canAccess } from './lib/roles.js';
+import { useVersionCheck } from './lib/useVersionCheck.js';
+
+/**
+ * Overlay BLOQUEANTE que aparece cuando se detecta una versión nueva del sistema
+ * (ver useVersionCheck). Obliga a recargar para limpiar la SPA vieja en memoria y
+ * cargar el bundle más reciente — sin depender de que el usuario haga Ctrl+Shift+R.
+ * @returns {JSX.Element}
+ */
+function UpdateOverlay() {
+  return (
+    <div role="alertdialog" aria-modal="true" aria-label="Nueva versión disponible"
+      style={{position:'fixed', inset:0, zIndex:100000, display:'grid', placeItems:'center', padding:24,
+        background:'linear-gradient(145deg,#0d1b3e 0%,#182642 45%,#1a4a8a 100%)', color:'#fff'}}>
+      <div style={{maxWidth:420, textAlign:'center'}}>
+        <div style={{width:64, height:64, margin:'0 auto 20px', display:'grid', placeItems:'center',
+          borderRadius:18, transform:'rotate(45deg)', background:'rgba(255,255,255,.10)'}}>
+          <i className="fa-solid fa-arrows-rotate" style={{fontSize:26, transform:'rotate(-45deg)'}}/>
+        </div>
+        <div style={{fontFamily:'var(--f-display)', fontSize:24, fontWeight:800, letterSpacing:'-.02em', marginBottom:10}}>
+          Hay una versión nueva
+        </div>
+        <p style={{fontSize:14, lineHeight:1.55, opacity:.85, marginBottom:24}}>
+          Se actualizó el sistema. Recargá para usar la versión más reciente y evitar errores
+          por datos viejos en pantalla.
+        </p>
+        <button onClick={() => window.location.reload()}
+          style={{cursor:'pointer', border:'none', borderRadius:10, padding:'13px 30px', fontSize:15, fontWeight:700,
+            color:'#0d1b3e', background:'#fff', boxShadow:'0 6px 20px rgba(0,0,0,.25)'}}>
+          <i className="fa-solid fa-rotate-right" style={{marginRight:8}}/>Recargar ahora
+        </button>
+        <div style={{fontSize:11, opacity:.6, marginTop:16}}>
+          Si no se actualiza, presioná <b>Ctrl + Shift + R</b>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const TWEAK_DEFAULTS = {
   dark: false,
@@ -53,6 +90,9 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [loginFading, setLoginFading] = useState(false);
   const [welcomeUser, setWelcomeUser] = useState(null);
+  // Detecta que se subió una versión nueva mientras la pestaña seguía abierta → overlay
+  // que obliga a recargar (limpia la SPA vieja en memoria sin Ctrl+Shift+R manual).
+  const updateAvailable = useVersionCheck();
 
   const { dark, accent, radius, sidebarLight, density, sucursalId, simulatedRole } = tweaks;
 
@@ -273,6 +313,9 @@ export default function App() {
   return (
     <ToastProvider>
     <>
+      {/* Overlay bloqueante de "versión nueva": va primero y con el z-index más alto
+          para cubrir todo (incluido el overlay de bienvenida) cuando se sube un deploy. */}
+      {updateAvailable && <UpdateOverlay />}
       {welcomeUser && (
         <div style={{position:'fixed', inset:0, zIndex:9999, display:'grid', placeItems:'center', background:'rgba(24,38,66,.9)', backdropFilter:'blur(10px)', animation:'fade .25s'}}>
           <div style={{textAlign:'center', color:'#fff', animation:'pop .4s cubic-bezier(.2,.8,.3,1.1)'}}>

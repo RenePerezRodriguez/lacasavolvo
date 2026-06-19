@@ -13,8 +13,10 @@ RewriteRule . /index.html [L]
 
 # ═══ CACHE CONTROL ═══
 <IfModule mod_headers.c>
-  # index.html NUNCA se cachea — siempre carga la versión más reciente
-  <FilesMatch "index\.html$">
+  # index.html y version.json NUNCA se cachean — index.html siempre trae el bundle
+  # más reciente; version.json es la sonda que detecta una versión nueva (debe llegar
+  # fresco al navegador para disparar el overlay de "recargá").
+  <FilesMatch "(index\.html|version\.json)$">
     Header set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
     Header set Pragma "no-cache"
     Header set Expires "0"
