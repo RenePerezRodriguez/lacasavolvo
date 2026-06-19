@@ -539,42 +539,97 @@ class CajaController extends Controller
     public function apiCierres(Request $request)
     {
         $sid = Auth::user()->sucursal_id;
-        $ini = $request->get('desde', Carbon::today()->subDays(30)->toDateString());
-        $fin = $request->get('hasta', Carbon::today()->toDateString());
+        $sucursalNombre = \App\Models\Sucursal::where('id', $sid)->value('nombre') ?? '';
 
-        $cierres = Cierre::with('user')
-            ->where('sucursal_id', $sid)
-            ->where('estado', 'ON')
-            ->whereBetween('fecha', [$ini, $fin])
-            ->orderBy('fecha', 'desc')->orderBy('id', 'desc')
-            ->get();
+        // La Lista de Cierres es el landing de Caja (igual que el legacy): paginada y buscable,
+        // sin ventana de fechas forzada (muestra todos los cierres de la sucursal). `desde/hasta`
+        // son filtros opcionales.
+        $q = Cierre::with('user')->where('sucursal_id', $sid)->where('estado', 'ON');
+        if ($request->filled('desde')) $q->where('fecha', '>=', $request->desde);
+        if ($request->filled('hasta')) $q->where('fecha', '<=', $request->hasta);
+        if ($request->filled('search')) {
+            $s = trim($request->search);
+            $q->where(function ($w) use ($s) {
+                $w->where('id', $s)->orWhere('fecha', 'like', "%{$s}%");
+            });
+        }
 
-        // OJO: en el modelo Cierre la COLUMNA `apertura` (monto) colisiona con la relación
-        // apertura(); $c->apertura devuelve el MONTO, no el modelo Apertura. Por eso la apertura
-        // (fecha + usuario) se resuelve aparte con un mapa por id (sin N+1).
+        $total = (clone $q)->count();
+        $cierres = $q->orderBy('fecha', 'desc')->orderBy('id', 'desc')
+            ->skip((int) $request->get('skip', 0))->take((int) $request->get('take', 10))->get();
+
+        // OJO: en el modelo Cierre la COLUMNA `apertura` (monto) tapa la relación apertura()
+        // ($c->apertura = monto, no el modelo). La apertura (fecha + usuario) se resuelve por id (sin N+1).
         $aperturas = Apertura::with('user')
             ->whereIn('id', $cierres->pluck('apertura_id')->filter()->unique())
             ->get()->keyBy('id');
 
-        // Solo el ÚLTIMO cierre activo se puede eliminar (fiel al legacy: destroy() deniega
-        // cualquier otro para no romper el arrastre de saldos). Se marca para el frontend.
+        // Solo el ÚLTIMO cierre activo se puede eliminar (fiel al legacy: destroy() deniega los demás).
         $ultimoId = (int) Cierre::where('sucursal_id', $sid)->where('estado', 'ON')->max('id');
 
-        return response()->json(['data' => $cierres->map(function ($c) use ($aperturas, $ultimoId) {
-            $ap = $aperturas->get($c->apertura_id);
-            return [
-                'id'             => $c->id,
-                'apertura_id'    => $c->apertura_id,
-                'fecha_apertura' => $ap?->fecha,
-                'fecha_cierre'   => $c->fecha,
-                'apertura'       => (float) $c->apertura,
-                'ingresos'       => (float) $c->ingresos,
-                'egresos'        => (float) $c->egresos,
-                'efectivo'       => (float) $c->cierre,
-                'usuario'        => $c->user?->name ?? $ap?->user?->name ?? '',
-                'es_ultimo'      => $c->id === $ultimoId,
-            ];
-        })]);
+        return response()->json([
+            'total' => $total,
+            'data'  => $cierres->map(function ($c) use ($aperturas, $ultimoId, $sucursalNombre) {
+                $ap = $aperturas->get($c->apertura_id);
+                return [
+                    'id'             => $c->id,
+                    'apertura_id'    => $c->apertura_id,
+                    'sucursal'       => $sucursalNombre,
+                    'fecha_apertura' => $ap?->fecha,
+                    'fecha_cierre'   => $c->fecha,
+                    'apertura'       => (float) $c->apertura,
+                    'ingresos'       => (float) $c->ingresos,
+                    'egresos'        => (float) $c->egresos,
+                    'efectivo'       => (float) $c->cierre,
+                    'usuario'        => $c->user?->name ?? $ap?->user?->name ?? '',
+                    'es_ultimo'      => $c->id === $ultimoId,
+                ];
+            }),
+        ]);
+    }
+
+    /**
+     * Vista de una apertura (réplica del legacy caja.show): panel de totales para la pantalla
+     * "CAJA [VISTA]". Sirve tanto para la apertura activa ("Última Apertura") como para un cierre
+     * pasado (el 👁 de la Lista de Cierres). Recalcula en vivo como el legacy (ini=apertura.fecha,
+     * fin=cierre.fecha o hoy; efectivo = apertura + ingresos − egresos). Guard de sucursal (IDOR).
+     *
+     * @param  \App\Models\Apertura  $apertura
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function apiAperturaShow(Apertura $apertura)
+    {
+        $sid = Auth::user()->sucursal_id;
+        abort_if((int) $apertura->sucursal_id !== (int) $sid, 403);
+
+        $apertura->load('user');
+        $cierre = Cierre::with('user')->where('apertura_id', $apertura->id)->where('estado', 'ON')->first();
+
+        $ini = Carbon::parse($apertura->fecha)->toDateString();
+        $fin = $cierre ? Carbon::parse($cierre->fecha)->toDateString() : Carbon::today()->toDateString();
+
+        // `fecha` es DATE → where() plano (no whereDate): mantiene usable `tranzas_fecha_idx`.
+        $ingresos = Tranza::where('sucursal_id', $sid)->where('estado', 'ON')->where('fecha', '>=', $ini)->where('fecha', '<=', $fin)->sum('monto_ingreso');
+        $egresos  = Tranza::where('sucursal_id', $sid)->where('estado', 'ON')->where('fecha', '>=', $ini)->where('fecha', '<=', $fin)->sum('monto_egreso');
+        $apMonto  = (float) $apertura->apertura;
+
+        $ultimoCierreId = (int) Cierre::where('sucursal_id', $sid)->where('estado', 'ON')->max('id');
+
+        return response()->json([
+            'apertura_id'      => $apertura->id,
+            'cerrado'          => $apertura->cerrado,            // 'NO' (abierta) | 'SI' (cerrada)
+            'sucursal'         => $apertura->sucursal?->nombre ?? '',
+            'fecha_apertura'   => $apertura->fecha,
+            'fecha_cierre'     => $cierre?->fecha,
+            'apertura'         => $apMonto,
+            'ingresos'         => (float) $ingresos,
+            'egresos'          => (float) $egresos,
+            'efectivo'         => $apMonto + (float) $ingresos - (float) $egresos,
+            'usuario_apertura' => $apertura->user?->name ?? '',
+            'usuario_cierre'   => $cierre?->user?->name ?? '',
+            'cierre_id'        => $cierre?->id,
+            'es_ultimo_cierre' => $cierre && $cierre->id === $ultimoCierreId,
+        ]);
     }
 
     /**

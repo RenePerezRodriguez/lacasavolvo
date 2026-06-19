@@ -25,6 +25,7 @@ const ROUTE_PERMISSION = {
   'cuentas':        'cuentas.index',
   'cuenta-detail':  'cuentas.show',
   'caja':           'caja.index',
+  'caja-vista':     'caja.show',
   'historial-caja': 'caja.show',
   'marcas':         'marcas.index',
   'industrias':     'industrias.index',

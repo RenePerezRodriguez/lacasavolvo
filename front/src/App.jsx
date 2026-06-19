@@ -5,7 +5,7 @@ import { LoginScreen, Dashboard } from './screens/main.jsx';
 import { VentasIndex, VentaNueva, VentaDetail } from './screens/ventas.jsx';
 import { Productos, ProductoDetail } from './screens/productos.jsx';
 import { Cotizaciones, CotizacionDetail } from './screens/cotizaciones.jsx';
-import { Caja } from './screens/caja.jsx';
+import { Caja, CajaVista } from './screens/caja.jsx';
 import { Compras, CompraDetail } from './screens/compras.jsx';
 import { Pedidos, PedidoDetail } from './screens/pedidos.jsx';
 import { Envios, EnvioDetail } from './screens/envios.jsx';
@@ -344,6 +344,7 @@ export default function App() {
     if (name === 'ajustes')        return <Ajustes onNav={onNav} sucursalId={sucursalId} user={user} effectivePermissions={effectivePermissions} />;
     if (name === 'cuentas')        return <Cuentas onNav={onNav} sucursalId={sucursalId} user={user} effectivePermissions={effectivePermissions} />;
     if (name === 'caja')           return <Caja onNav={onNav} sucursalId={sucursalId} user={user} effectivePermissions={effectivePermissions} />;
+    if (name === 'caja-vista')     return <CajaVista aperturaId={route.id} onNav={onNav} sucursalId={sucursalId} user={user} effectivePermissions={effectivePermissions} />;
     if (name === 'historial-caja') return <HistorialCaja onNav={onNav} sucursalId={sucursalId} user={user} />;
     if (name === 'marcas')         return <Marcas onNav={onNav} effectivePermissions={effectivePermissions} />;
     if (name === 'industrias')     return <Industrias onNav={onNav} effectivePermissions={effectivePermissions} />;

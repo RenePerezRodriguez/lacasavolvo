@@ -48,12 +48,38 @@ class CajaCierresTest extends TestCase
         $resp = $this->getJson('/api/caja/cierres');
 
         $resp->assertStatus(200)->assertJsonStructure([
+            'total',
             'data' => [[
-                'id', 'apertura_id', 'fecha_apertura', 'fecha_cierre',
+                'id', 'apertura_id', 'sucursal', 'fecha_apertura', 'fecha_cierre',
                 'apertura', 'ingresos', 'egresos', 'efectivo', 'usuario', 'es_ultimo',
             ]],
         ]);
+        $this->assertGreaterThanOrEqual(1, $resp->json('total'));
         $this->assertNotEmpty($resp->json('data'));
+    }
+
+    public function test_apertura_show_devuelve_resumen_de_un_cierre(): void
+    {
+        $cierre = $this->crearCierreSuc1();
+
+        $resp = $this->getJson("/api/caja/aperturas/{$cierre->apertura_id}");
+
+        $resp->assertStatus(200)
+            ->assertJsonStructure([
+                'apertura_id', 'cerrado', 'sucursal', 'fecha_apertura', 'fecha_cierre',
+                'apertura', 'ingresos', 'egresos', 'efectivo', 'usuario_apertura',
+                'usuario_cierre', 'cierre_id', 'es_ultimo_cierre',
+            ])
+            ->assertJsonPath('cerrado', 'SI')
+            ->assertJsonPath('cierre_id', $cierre->id);
+    }
+
+    public function test_apertura_show_de_otra_sucursal_devuelve_403(): void
+    {
+        $cierre = $this->crearCierreSuc1();
+        $this->actingAsOtraSucursal(2);
+
+        $this->getJson("/api/caja/aperturas/{$cierre->apertura_id}")->assertStatus(403);
     }
 
     public function test_detalle_de_cierre_incluye_resumen_y_movimientos(): void

@@ -100,6 +100,7 @@ export const caja = {
   aperturas:      (params) => http.get('/caja/aperturas', { params }),
   // Cierres (réplica del legacy "Lista de Cierres" + ojito): lista, detalle, PDF y eliminar (revertir).
   cierres:        (params) => http.get('/caja/cierres', { params }),
+  aperturaShow:   (id)     => http.get(`/caja/aperturas/${id}`),
   cierreDetalle:  (id)     => http.get(`/caja/cierres/${id}/detalle`),
   cierrePdf:      (id)     => http.get(`/caja/cierres/${id}/pdf`, { responseType: 'blob' }),
   revertirCierre: (data)   => http.post('/caja/revertir-cierre', data),
