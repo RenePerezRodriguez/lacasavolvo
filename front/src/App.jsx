@@ -243,6 +243,10 @@ export default function App() {
     return detailMap[name] ?? name;
   }
 
+  // Versión nueva detectada: el overlay TAPA TODO (login, loading o app) y obliga a
+  // recargar. Va antes de los returns tempranos para que aplique en cualquier estado.
+  if (updateAvailable) return <UpdateOverlay />;
+
   if (authLoading) {
     return (
       <div style={{ height: '100vh', background: 'var(--bg)', display: 'flex', overflow: 'hidden' }}>
@@ -313,9 +317,6 @@ export default function App() {
   return (
     <ToastProvider>
     <>
-      {/* Overlay bloqueante de "versión nueva": va primero y con el z-index más alto
-          para cubrir todo (incluido el overlay de bienvenida) cuando se sube un deploy. */}
-      {updateAvailable && <UpdateOverlay />}
       {welcomeUser && (
         <div style={{position:'fixed', inset:0, zIndex:9999, display:'grid', placeItems:'center', background:'rgba(24,38,66,.9)', backdropFilter:'blur(10px)', animation:'fade .25s'}}>
           <div style={{textAlign:'center', color:'#fff', animation:'pop .4s cubic-bezier(.2,.8,.3,1.1)'}}>
