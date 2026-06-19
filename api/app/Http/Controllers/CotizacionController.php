@@ -315,7 +315,10 @@ class CotizacionController extends Controller
                 'p_norm'      => (float) $d->p_norm,
                 'p_fact'      => (float) $d->p_fact,
                 'cantidad'    => $d->cantidad,
-                'subtotal'    => 'Bs. ' . number_format($d->subtotal, 2),
+                'subtotal'     => 'Bs. ' . number_format($d->subtotal, 2),
+                // `subtotal_num` para que el front sume el subtotal GUARDADO (preserva la
+                // precisión del precio tipeado), no `costo × cantidad` con el costo truncado.
+                'subtotal_num' => (float) $d->subtotal,
             ])
         );
     }

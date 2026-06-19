@@ -265,7 +265,9 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
 
   const estado   = c?.estado ?? '—';
   const editable = estado === 'VALIDO';
-  const montoNum = detalles.reduce((s, d) => s + parseFloat(d.costo ?? 0) * d.cantidad, 0);
+  // Suma de los SUBTOTALES guardados (preservan la precisión del precio tipeado),
+  // no `costo × cantidad` sobre el costo truncado a 2 decimales.
+  const montoNum = detalles.reduce((s, d) => s + (d.subtotal_num != null ? parseFloat(d.subtotal_num) : parseFloat(d.costo ?? 0) * d.cantidad), 0);
   const totalNum = Math.max(0, montoNum - descuento);
 
   async function guardarDescuento(d) {
@@ -382,7 +384,7 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
                               <input
                                 key={`cp-${it.id}-${it.costo}`}
                                 className="input mono tabular"
-                                type="number" min="0" step="0.01"
+                                type="number" min="0" step="any"
                                 defaultValue={parseFloat(it.costo).toFixed(2)}
                                 disabled={saving}
                                 onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}

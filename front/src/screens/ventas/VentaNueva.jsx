@@ -184,7 +184,9 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
     setTimeout(() => setHighlightCliente(false), 2500);
   }
 
-  const total = detalles.reduce((s, d) => s + parseFloat(d.costo) * d.cantidad, 0);
+  // Total = suma de los SUBTOTALES guardados (preservan la precisión del precio tipeado,
+  // p. ej. 83.3333×12 = 1000.00), no `costo × cantidad` sobre el costo truncado a 2 decimales.
+  const total = detalles.reduce((s, d) => s + (d.subtotal_num != null ? parseFloat(d.subtotal_num) : parseFloat(d.costo) * d.cantidad), 0);
 
   return (
     <div className="fade-up stack" style={{"--gap":"20px"}}>
@@ -302,7 +304,7 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
                             <input
                               key={`p-${it.id}-${it.costo}`}
                               className="input mono tabular"
-                              type="number" min="0" step="0.01"
+                              type="number" min="0" step="any"
                               defaultValue={parseFloat(it.costo).toFixed(2)}
                               disabled={saving}
                               onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
@@ -323,7 +325,7 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
                           )}
                         </div>
                       </td>
-                      <td className="right mono tabular strong" style={{fontSize:13, fontWeight:700}}>Bs {(parseFloat(it.costo)*it.cantidad).toFixed(2)}</td>
+                      <td className="right mono tabular strong" style={{fontSize:13, fontWeight:700}}>Bs {Number(it.subtotal_num ?? parseFloat(it.costo)*it.cantidad).toLocaleString(undefined,{minimumFractionDigits:2})}</td>
                       <td><button className="icon-btn danger" title="Eliminar ítem" disabled={saving} onClick={() => removeItem(it)}><Icon name="fa-trash" style={{fontSize:11}}/></button></td>
                     </tr>
                   ))}

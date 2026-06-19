@@ -705,7 +705,11 @@ class VentaController extends Controller
             'p_norm'      => (float) $d->p_norm,
             'p_fact'      => (float) $d->p_fact,
             'cantidad'    => $d->cantidad,
-            'subtotal'    => 'Bs. '.number_format($d->costo * $d->cantidad, 2),
+            // El subtotal GUARDADO preserva la precisión del precio tipeado (legacy: 83.3333×12
+            // = 1000.00 entra en decimal(9,2)). NO se recalcula desde `costo` truncado a 2
+            // decimales (daría 999.96 y no cuadraría la venta). `subtotal_num` para sumar en el front.
+            'subtotal'     => 'Bs. '.number_format($d->subtotal, 2),
+            'subtotal_num' => (float) $d->subtotal,
         ]));
     }
 
@@ -755,8 +759,12 @@ class VentaController extends Controller
 
     private function recalcular(Venta $venta): void
     {
+        // Suma los SUBTOTALES guardados (no `costo * cantidad`): el subtotal preserva la
+        // precisión del precio tipeado (legacy), mientras que `costo` está truncado a 2
+        // decimales. Para datos viejos subtotal == costo*cantidad, así que no cambia nada;
+        // solo afecta a renglones nuevos con precio de más de 2 decimales (cuadre exacto).
         $t = $venta->detalles()->where('estado','VALIDO')
-            ->selectRaw('COALESCE(SUM(costo * cantidad), 0) as total')
+            ->selectRaw('COALESCE(SUM(subtotal), 0) as total')
             ->value('total');
         $venta->monto = $t;
         $venta->total = $t;
