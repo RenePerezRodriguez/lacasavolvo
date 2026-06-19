@@ -19,36 +19,40 @@ import { canAccess } from './lib/roles.js';
 import { useVersionCheck } from './lib/useVersionCheck.js';
 
 /**
- * Overlay BLOQUEANTE que aparece cuando se detecta una versión nueva del sistema
- * (ver useVersionCheck). Obliga a recargar para limpiar la SPA vieja en memoria y
- * cargar el bundle más reciente — sin depender de que el usuario haga Ctrl+Shift+R.
- * @returns {JSX.Element}
+ * Cartel NO bloqueante (sugerencia) que aparece cuando se detecta una versión nueva
+ * del sistema (ver useVersionCheck). No interrumpe el trabajo: avisa que recargue
+ * cuando pueda y, si está en una operación importante, que la termine primero. Se
+ * puede ocultar. La recarga limpia la SPA vieja en memoria sin depender del Ctrl+Shift+R.
+ * @returns {JSX.Element|null}
  */
-function UpdateOverlay() {
+function UpdateBanner() {
+  const [hidden, setHidden] = useState(false);
+  if (hidden) return null;
   return (
-    <div role="alertdialog" aria-modal="true" aria-label="Nueva versión disponible"
-      style={{position:'fixed', inset:0, zIndex:100000, display:'grid', placeItems:'center', padding:24,
-        background:'linear-gradient(145deg,#0d1b3e 0%,#182642 45%,#1a4a8a 100%)', color:'#fff'}}>
-      <div style={{maxWidth:420, textAlign:'center'}}>
-        <div style={{width:64, height:64, margin:'0 auto 20px', display:'grid', placeItems:'center',
-          borderRadius:18, transform:'rotate(45deg)', background:'rgba(255,255,255,.10)'}}>
-          <i className="fa-solid fa-arrows-rotate" style={{fontSize:26, transform:'rotate(-45deg)'}}/>
-        </div>
-        <div style={{fontFamily:'var(--f-display)', fontSize:24, fontWeight:800, letterSpacing:'-.02em', marginBottom:10}}>
-          Hay una versión nueva
-        </div>
-        <p style={{fontSize:14, lineHeight:1.55, opacity:.85, marginBottom:24}}>
-          Se actualizó el sistema. Recargá para usar la versión más reciente y evitar errores
-          por datos viejos en pantalla.
-        </p>
-        <button onClick={() => window.location.reload()}
-          style={{cursor:'pointer', border:'none', borderRadius:10, padding:'13px 30px', fontSize:15, fontWeight:700,
-            color:'#0d1b3e', background:'#fff', boxShadow:'0 6px 20px rgba(0,0,0,.25)'}}>
-          <i className="fa-solid fa-rotate-right" style={{marginRight:8}}/>Recargar ahora
+    <div role="status" aria-label="Versión nueva disponible" className="fade-up"
+      style={{position:'fixed', bottom:18, right:18, zIndex:100000, maxWidth:340, pointerEvents:'auto',
+        background:'var(--surface)', border:'1px solid var(--line)', borderLeft:'4px solid var(--accent)',
+        borderRadius:'var(--r-md)', boxShadow:'0 12px 32px rgba(13,27,62,.20)', padding:'13px 14px 14px 16px',
+        fontSize:13, color:'var(--ink)'}}>
+      <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:6}}>
+        <i className="fa-solid fa-arrows-rotate" style={{color:'var(--accent)', fontSize:14}}/>
+        <strong style={{fontSize:13.5}}>Hay una versión nueva</strong>
+        <button onClick={() => setHidden(true)} title="Ocultar" aria-label="Ocultar aviso"
+          style={{marginLeft:'auto', background:'none', border:'none', cursor:'pointer', color:'var(--soft)', padding:2, lineHeight:1}}>
+          <i className="fa-solid fa-xmark" style={{fontSize:13}}/>
         </button>
-        <div style={{fontSize:11, opacity:.6, marginTop:16}}>
-          Si no se actualiza, presioná <b>Ctrl + Shift + R</b>
-        </div>
+      </div>
+      <p style={{margin:'0 0 11px', lineHeight:1.5, color:'var(--soft)'}}>
+        Recargá para usar la versión más reciente. <b style={{color:'var(--ink)'}}>Si estás en una operación
+        importante (venta, cotización, caja), terminala primero</b> y recién ahí recargá.
+      </p>
+      <div style={{display:'flex', alignItems:'center', gap:10}}>
+        <button onClick={() => window.location.reload()}
+          style={{cursor:'pointer', border:'none', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:700,
+            color:'#fff', background:'var(--accent)'}}>
+          <i className="fa-solid fa-rotate-right" style={{marginRight:6}}/>Recargar ahora
+        </button>
+        <span style={{fontSize:11, color:'var(--soft)'}}>o <b>Ctrl+Shift+R</b></span>
       </div>
     </div>
   );
@@ -243,10 +247,6 @@ export default function App() {
     return detailMap[name] ?? name;
   }
 
-  // Versión nueva detectada: el overlay TAPA TODO (login, loading o app) y obliga a
-  // recargar. Va antes de los returns tempranos para que aplique en cualquier estado.
-  if (updateAvailable) return <UpdateOverlay />;
-
   if (authLoading) {
     return (
       <div style={{ height: '100vh', background: 'var(--bg)', display: 'flex', overflow: 'hidden' }}>
@@ -270,6 +270,7 @@ export default function App() {
   if (!user) {
     return (
       <>
+        {updateAvailable && <UpdateBanner />}
         <LoginScreen onLogin={handleLogin} fading={loginFading} />
         <TweaksPanel title="Prototipo" />
       </>
@@ -317,6 +318,9 @@ export default function App() {
   return (
     <ToastProvider>
     <>
+      {/* Cartel NO bloqueante de "versión nueva" (sugerencia): no interrumpe el trabajo;
+          avisa de terminar la operación en curso antes de recargar. */}
+      {updateAvailable && <UpdateBanner />}
       {welcomeUser && (
         <div style={{position:'fixed', inset:0, zIndex:9999, display:'grid', placeItems:'center', background:'rgba(24,38,66,.9)', backdropFilter:'blur(10px)', animation:'fade .25s'}}>
           <div style={{textAlign:'center', color:'#fff', animation:'pop .4s cubic-bezier(.2,.8,.3,1.1)'}}>
