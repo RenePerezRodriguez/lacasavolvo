@@ -426,22 +426,8 @@ export function VentaDetail({ ventaId, ventaData, onNav }) {
             )}
           </Card>
 
-          <Card title="Resumen">
-            <div className="stack" style={{"--gap":"10px"}}>
-              {[
-                {label:"N° Venta", value:`#${ventaId}`},
-                {label:"Tipo", value: v?.tipo ?? '—'},
-                {label:"Fecha", value: v?.fecha ?? '—'},
-                {label:"Cliente", value: v?.cuenta ?? '—'},
-                {label:"Estado", value: estado},
-              ].map(r => (
-                <div key={r.label} className="row" style={{justifyContent:"space-between", fontSize:12}}>
-                  <span style={{color:"var(--soft)"}}>{r.label}</span>
-                  <span style={{fontWeight:600, color:"var(--ink)"}}>{r.value}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
+          {/* "Resumen" redundante quitado: N°/Tipo/Fecha/Cliente/Estado ya están en la
+              cabecera (PageHead + la factura con #venta y StatusBadge). */}
         </div>
       </div>
     </div>

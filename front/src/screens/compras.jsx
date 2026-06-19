@@ -6,8 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import { useListData, useColumnVisibility } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
-import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, AccountSearchInput, QtyStepper, DocHeader } from '../lib/components.jsx';
-import { CompraFormModal } from './forms.jsx';
+import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader } from '../lib/components.jsx';
+import { CompraFormModal, EncabezadoModal } from './forms.jsx';
 import { openPdf, compras as comprasApi } from '../services/api.js';
 
 /**
@@ -187,39 +187,11 @@ export function CompraDetail({ compraId, compraData, onNav }) {
   const [devProdId, setDevProdId]   = useState('');
   const [devCant, setDevCant]       = useState(1);
 
-  // Edición de encabezado (Resumen) en PROFORMA
-  const [editTipo, setEditTipo]           = useState('');
-  const [editFecha, setEditFecha]         = useState('');
-  const [editCuentaId, setEditCuentaId]   = useState(null);
-  const [editCuentaNombre, setEditCuentaNombre] = useState('');
-  const [editandoResumen, setEditandoResumen] = useState(false);
-
-  // Inicializar campos de edición cuando se cargan los datos de la compra
-  useEffect(() => {
-    if (c) {
-      setEditTipo(c.tipo ?? 'CONTADO');
-      setEditFecha(c.fecha_raw ?? '');
-      setEditCuentaId(c.cuenta_id ?? null);
-      setEditCuentaNombre(c.cuenta ?? '');
-    }
-  }, [c?.id, c?.cuenta_id]);
-
-  async function handleSaveResumen() {
-    if (!editCuentaId) return;
-    setSaving(true); setError(null);
-    try {
-      await comprasApi.updateEncabezado({
-        compra_id: compraId,
-        cuenta_id: editCuentaId,
-        tipo: editTipo,
-        fecha: editFecha,
-      });
-      await reloadHeader();
-      setEditandoResumen(false);
-    } catch (e) {
-      setError(e?.response?.data?.message ?? 'Error al guardar cambios.');
-    } finally { setSaving(false); }
-  }
+  // Edición de encabezado: botón en la cabecera → modal compartido (EncabezadoModal),
+  // igual que Cotizaciones/Envíos (DRY, ya no inline en el "Resumen"). `editTipo`
+  // (CONTADO/CRÉDITO) es el único campo extra que maneja el padre.
+  const [showEditEnc, setShowEditEnc] = useState(false);
+  const [editTipo, setEditTipo]       = useState('CONTADO');
 
   useEffect(() => {
     setLoading(true);
@@ -270,9 +242,7 @@ export function CompraDetail({ compraId, compraData, onNav }) {
   async function handleValidar() {
     if (!window.confirm('¿Validar esta compra? El stock será actualizado.')) return;
     setError(null); setSaving(true);
-    // Cerrar el editor de encabezado al validar: si quedaba abierto, el editor (con "Guardar")
-    // seguía mostrándose aunque la compra ya no fuera PROFORMA (bug reportado por QA).
-    setEditandoResumen(false);
+    setShowEditEnc(false); // cerrar el modal de encabezado si quedó abierto al validar
     try { await comprasApi.validar(compraId); await Promise.all([reloadDetalles(), reloadHeader()]); }
     catch (e) { setError(e?.response?.data?.error ?? 'Error al validar'); }
     finally { setSaving(false); }
@@ -338,10 +308,28 @@ export function CompraDetail({ compraId, compraData, onNav }) {
       <PageHead title={`Compra #${compraId}`} sub={`${c?.cuenta??'—'} · ${c?.fecha??'—'} · ${c?.tipo??'—'}`}
         actions={<>
           <Button variant="ghost" icon="fa-arrow-left" size="sm" onClick={()=>onNav('compras')}>Volver</Button>
+          {estado === 'PROFORMA' && <Button variant="secondary" icon="fa-pen" size="sm" onClick={() => { setEditTipo(c?.tipo ?? 'CONTADO'); setShowEditEnc(true); }}>Editar encabezado</Button>}
           <PdfButton onPdf={() => openPdf(`/compras/${compraId}/pdf`)} />
           {estado !== 'ANULADO' && <Button variant="ghost" icon="fa-ban" size="sm" style={{color:"var(--danger)"}} disabled={saving} onClick={handleAnular}>Anular</Button>}
         </>}
       />
+      {showEditEnc && c && (
+        <EncabezadoModal docLabel="Compra" docId={compraId} cuentaLabel="Proveedor"
+          initial={{ cuenta_id:c.cuenta_id, cuenta:c.cuenta, nit:c.nit, fecha_raw:c.fecha_raw }}
+          searchProps={{ tipoFiltro:"PROVEEDOR", take:0 }}
+          extraFields={
+            <div className="field"><label className="label">Tipo</label>
+              <div className="row" style={{gap:6}}>
+                {["CONTADO","CREDITO"].map(t => (
+                  <button key={t} type="button" onClick={() => setEditTipo(t)}
+                    style={{flex:1,padding:"10px",borderRadius:"var(--r-md)",border:editTipo===t?"2px solid var(--accent)":"2px solid var(--line)",background:editTipo===t?"var(--accent-a15)":"var(--surface)",color:editTipo===t?"var(--accent)":"var(--body)",fontSize:12,fontWeight:700,cursor:"pointer"}}>{t}</button>
+                ))}
+              </div>
+            </div>
+          }
+          onClose={()=>setShowEditEnc(false)}
+          onSubmit={async (v) => { await comprasApi.updateEncabezado({ compra_id: compraId, cuenta_id: v.cuenta_id, tipo: editTipo, fecha: v.fecha }); await reloadHeader(); }}/>
+      )}
       {error && <div style={{padding:"10px 14px",background:"var(--danger-soft)",border:"1px solid rgba(220,38,38,.25)",borderRadius:"var(--r-md)",fontSize:13,color:"var(--danger)",display:"flex",gap:8,alignItems:"center"}}><Icon name="fa-circle-exclamation" style={{fontSize:12,flexShrink:0}}/><span>{error}</span></div>}
 
       {/* Encabezado / intro arriba (mismo patrón que cotizaciones, pedido de René). */}
@@ -522,76 +510,24 @@ export function CompraDetail({ compraId, compraData, onNav }) {
               </div>
             )}
           </Card>
-          <Card title="Resumen" head={estado === 'PROFORMA' && !editandoResumen ? (
-            <Button variant="ghost" size="sm" icon="fa-pen" onClick={() => setEditandoResumen(true)}>Editar</Button>
-          ) : null}>
-            {/* El editor solo se muestra en PROFORMA: si la compra se valida con el editor
-                abierto, no debe quedar pegado (estado terminal = solo lectura). */}
-            {editandoResumen && estado === 'PROFORMA' ? (
-              <div className="stack" style={{"--gap":"10px"}}>
-                {/* N° Compra — no editable */}
+          {/* Estado de pago/saldo. La edición de encabezado (proveedor/tipo/fecha) se hace
+              desde el botón "Editar encabezado" de la cabecera → EncabezadoModal, igual que los
+              demás módulos. El resumen del documento ya vive arriba en el DocHeader (no se duplica). */}
+          <Card title="Pago">
+            <div className="stack" style={{"--gap":"10px"}}>
+              {[{label:"Pago",value: estado === 'VALIDO' ? (c?.pagado??'—') : '—', pago: estado === 'VALIDO'}].map(r => (
+                <div key={r.label} className="row" style={{justifyContent:"space-between",fontSize:12}}>
+                  <span style={{color:"var(--soft)"}}>{r.label}</span>
+                  <span style={{fontWeight:600,color: r.pago ? (c?.pagado === 'PAGADO' ? "var(--success)" : "var(--warning)") : "var(--ink)"}}>{r.value}</span>
+                </div>
+              ))}
+              {c?.saldo > 0 && (
                 <div className="row" style={{justifyContent:"space-between",fontSize:12}}>
-                  <span style={{color:"var(--soft)"}}>N° Compra</span>
-                  <span style={{fontWeight:700,color:"var(--ink)"}}>#{compraId}</span>
+                  <span style={{color:"var(--soft)"}}>Saldo</span>
+                  <span style={{fontWeight:700,color:"var(--danger)"}}>Bs {parseFloat(c.saldo).toFixed(2)}</span>
                 </div>
-                {/* Tipo */}
-                <div className="field" style={{marginBottom:0}}>
-                  <label className="label" style={{fontSize:10}}>Tipo</label>
-                  <div className="row" style={{gap:6}}>
-                    {["CONTADO","CREDITO"].map(t => (
-                      <button key={t} type="button" onClick={() => setEditTipo(t)}
-                        style={{flex:1,padding:"8px",borderRadius:"var(--r-md)",border:editTipo===t?"2px solid var(--accent)":"2px solid var(--line)",background:editTipo===t?"var(--accent-a15)":"var(--surface)",color:editTipo===t?"var(--accent)":"var(--body)",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {/* Fecha */}
-                <div className="field" style={{marginBottom:0}}>
-                  <label className="label" style={{fontSize:10}}>Fecha</label>
-                  <input className="input" type="date" value={editFecha} onChange={e => setEditFecha(e.target.value)} style={{fontSize:12}}/>
-                </div>
-                {/* Proveedor */}
-                <div className="field" style={{marginBottom:0}}>
-                  <label className="label" style={{fontSize:10}}>Proveedor</label>
-                  {editCuentaId ? (
-                    <div className="row" style={{alignItems:"center",justifyContent:"space-between"}}>
-                      <span style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{editCuentaNombre}</span>
-                      <Button variant="ghost" size="sm" onClick={() => { setEditCuentaId(null); setEditCuentaNombre(''); }} style={{fontSize:10}}><Icon name="fa-times" style={{fontSize:9}}/></Button>
-                    </div>
-                  ) : (
-                    <AccountSearchInput
-                      onSelect={(ct) => { setEditCuentaId(ct.id); setEditCuentaNombre(ct.nombre); }}
-                      tipoFiltro="PROVEEDOR"
-                      placeholder="Buscar proveedor…"
-                      take={0}
-                    />
-                  )}
-                </div>
-                {/* Botones */}
-                <div className="row" style={{gap:8,marginTop:4}}>
-                  <Button variant="ghost" size="sm" onClick={() => setEditandoResumen(false)} disabled={saving}>Cancelar</Button>
-                  <Button variant="accent" size="sm" onClick={handleSaveResumen} disabled={saving || !editCuentaId || !editFecha} style={{flex:1}}>
-                    {saving ? <Icon name="fa-spinner fa-spin"/> : "Guardar"}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="stack" style={{"--gap":"10px"}}>
-                {[{label:"Pago",value: estado === 'VALIDO' ? (c?.pagado??'—') : '—', pago: estado === 'VALIDO'}].map(r => (
-                  <div key={r.label} className="row" style={{justifyContent:"space-between",fontSize:12}}>
-                    <span style={{color:"var(--soft)"}}>{r.label}</span>
-                    <span style={{fontWeight:600,color: r.pago ? (c?.pagado === 'PAGADO' ? "var(--success)" : "var(--warning)") : "var(--ink)"}}>{r.value}</span>
-                  </div>
-                ))}
-                {c?.saldo > 0 && (
-                  <div className="row" style={{justifyContent:"space-between",fontSize:12}}>
-                    <span style={{color:"var(--soft)"}}>Saldo</span>
-                    <span style={{fontWeight:700,color:"var(--danger)"}}>Bs {parseFloat(c.saldo).toFixed(2)}</span>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
           </Card>
         </div>
       </div>

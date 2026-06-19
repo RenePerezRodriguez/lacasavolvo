@@ -6,7 +6,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useListData, useColumnVisibility } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
 import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader } from '../lib/components.jsx';
-import { CotizacionFormModal, CotizacionEncabezadoModal } from './forms.jsx';
+import { CotizacionFormModal, EncabezadoModal } from './forms.jsx';
 import { openPdf, cotizaciones as cotizApi } from '../services/api.js';
 
 /**
@@ -315,7 +315,13 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
           {editable && <Button variant="ghost" icon="fa-ban" size="sm" style={{color:"var(--danger)"}} disabled={saving} onClick={handleAnular}>Anular</Button>}
         </>}
       />
-      {showEditEnc && c && <CotizacionEncabezadoModal cotizacion={c} onClose={()=>setShowEditEnc(false)} onSaved={reloadHeader}/>}
+      {showEditEnc && c && (
+        <EncabezadoModal docLabel="Cotización" docId={c.id} cuentaLabel="Cliente"
+          initial={{ cuenta_id:c.cuenta_id, cuenta:c.cuenta, nit:c.nit, fecha_raw:c.fecha_raw, observacion:c.observacion }}
+          showObservacion obsPlaceholder="Nombre/teléfono del cliente, términos, vigencia…" searchProps={{ take:5 }}
+          onClose={()=>setShowEditEnc(false)}
+          onSubmit={async (v) => { await cotizApi.updateEncabezado({ cotizacion_id:c.id, cuenta_id:v.cuenta_id, fecha:v.fecha, observacion:v.observacion, descuento:c.descuento ?? 0 }); await reloadHeader(); }}/>
+      )}
       {error && <div style={{padding:"10px 14px",background:"var(--danger-soft)",border:"1px solid rgba(220,38,38,.25)",borderRadius:"var(--r-md)",fontSize:13,color:"var(--danger)",display:"flex",gap:8,alignItems:"center"}}><Icon name="fa-circle-exclamation" style={{fontSize:12,flexShrink:0}}/><span>{error}</span></div>}
 
       {/* Encabezado / intro arriba (pedido de QA): el cliente y la observación van como cabecera

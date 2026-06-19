@@ -469,92 +469,98 @@ export function CotizacionFormModal({ onClose, onSaved }) {
 }
 
 /**
- * Modal para EDITAR el encabezado de una cotización existente: cliente, fecha y
- * observación. El sistema legacy tenía esta edición (y la observación, donde se
- * anotaban nombre/teléfono del cliente cuando la cuenta era genérica "SIN NOMBRE");
- * el sistema nuevo la había perdido (regresión de QA). El `descuento` actual se
- * REENVÍA para no resetearlo (el backend lo pone en 0 si no llega).
+ * Modal GENÉRICO "Editar encabezado" para documentos con cuenta + fecha (+ observación).
+ * Un solo componente compartido (DRY) que reemplaza los modales por módulo: lo usan
+ * **Compras** (proveedor + tipo + fecha) y **Cotizaciones** (cliente + fecha + observación).
+ * Envíos tiene su propio modal porque su encabezado es de otra forma (destino sucursal /
+ * transporte / monto). El editar SIEMPRE se dispara desde la cabecera (botón arriba), no inline.
  *
  * @param {object} props
- * @param {object} props.cotizacion - Cotización a editar (id, cuenta_id, cuenta, fecha_raw, observacion, descuento).
+ * @param {string} props.docLabel - Etiqueta del documento ("Compra" | "Cotización").
+ * @param {number|string} props.docId - N° del documento (para el subtítulo).
+ * @param {string} props.cuentaLabel - "Proveedor" | "Cliente".
+ * @param {object} [props.initial] - Valores iniciales { cuenta_id, cuenta, nit, fecha_raw, observacion }.
+ * @param {boolean} [props.showObservacion=false] - Muestra el campo observación.
+ * @param {string} [props.obsPlaceholder] - Placeholder de la observación.
+ * @param {object} [props.searchProps] - Props extra para AccountSearchInput (ej. { tipoFiltro:'PROVEEDOR' }).
+ * @param {React.ReactNode} [props.extraFields] - Campos extra del módulo, controlados por el padre (ej. Tipo en Compras).
  * @param {function(): void} props.onClose - Cierra el modal.
- * @param {function(): void} [props.onSaved] - Callback tras guardar (para recargar el encabezado).
+ * @param {function(object): Promise<void>} props.onSubmit - Recibe { cuenta_id, fecha, observacion } y persiste/recarga.
  * @returns {JSX.Element}
  */
-export function CotizacionEncabezadoModal({ cotizacion, onClose, onSaved }) {
+export function EncabezadoModal({ docLabel, docId, cuentaLabel = 'Cuenta', initial = {}, showObservacion = false, obsPlaceholder, searchProps = {}, extraFields, onClose, onSubmit }) {
   const toast = useToast();
-  const [cliente, setCliente] = useState(
-    cotizacion.cuenta_id ? { id: cotizacion.cuenta_id, nombre: cotizacion.cuenta, nit: cotizacion.nit } : null
+  const [cuenta, setCuenta] = useState(
+    initial.cuenta_id ? { id: initial.cuenta_id, nombre: initial.cuenta, nit: initial.nit } : null
   );
-  const [showCliente, setShowCliente] = useState(false);
-  const [saving, setSaving]           = useState(false);
-  const [errors, setErrors]           = useState({});
+  const [showSearch, setShowSearch] = useState(false);
+  const [saving, setSaving]         = useState(false);
+  const [errors, setErrors]         = useState({});
   const fechaRef = useRef();
   const obsRef   = useRef();
+  const cuentaLow = (cuentaLabel || 'cuenta').toLowerCase();
 
   const handleSubmit = async () => {
-    if (!cliente?.id) { setErrors({ cliente: 'Selecciona un cliente' }); return; }
+    if (!cuenta?.id) { setErrors({ cuenta: `Selecciona un ${cuentaLow}` }); return; }
     setErrors({});
     setSaving(true);
     try {
-      await cotizApi.updateEncabezado({
-        cotizacion_id: cotizacion.id,
-        cuenta_id:     cliente.id,
-        fecha:         fechaRef.current.value,
-        observacion:   obsRef.current.value,
-        descuento:     cotizacion.descuento ?? 0,  // preservar el descuento actual
+      await onSubmit({
+        cuenta_id:   cuenta.id,
+        fecha:       fechaRef.current?.value,
+        observacion: showObservacion ? (obsRef.current?.value ?? '') : undefined,
       });
       toast('Encabezado actualizado', 'success');
-      onSaved && onSaved();
       onClose();
     } catch (err) {
       const d = err?.response?.data;
       toast(d?.error || d?.message || 'Error al actualizar el encabezado', 'error');
       logger.error(err);
+      setSaving(false);
     }
-    finally { setSaving(false); }
   };
 
   return (
-    <FormModal title="Editar encabezado" subtitle={`Cotización #${cotizacion.id}`} icon="fa-pen"
+    <FormModal title="Editar encabezado" subtitle={`${docLabel} #${docId}`} icon="fa-pen"
       onClose={onClose} onSubmit={handleSubmit} submitLabel={saving ? "Guardando…" : "Guardar cambios"}>
       <div className="stack" style={{"--gap":"14px"}}>
         <div>
-          <Card title={<>Cliente <R/></>} head={
-            <div className="row" style={{gap:6}}>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowCliente(!showCliente)}>
-                <Icon name="fa-search" style={{fontSize:10}}/>{cliente ? "Cambiar" : "Buscar"}
-              </button>
-            </div>
+          <Card title={<>{cuentaLabel} <R/></>} head={
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowSearch(!showSearch)}>
+              <Icon name="fa-search" style={{fontSize:10}}/>{cuenta ? "Cambiar" : "Buscar"}
+            </button>
           }>
-            {cliente ? (
+            {cuenta ? (
               <div>
-                <div style={{fontSize:14, fontWeight:700, color:"var(--ink)"}}>{cliente.nombre}</div>
-                {cliente.nit && <div className="mono" style={{fontSize:11, color:"var(--soft)", marginTop:2}}>NIT {cliente.nit}</div>}
+                <div style={{fontSize:14, fontWeight:700, color:"var(--ink)"}}>{cuenta.nombre}</div>
+                {cuenta.nit && <div className="mono" style={{fontSize:11, color:"var(--soft)", marginTop:2}}>NIT {cuenta.nit}</div>}
               </div>
             ) : (
-              <div style={{color: errors.cliente ? "var(--danger)" : "var(--soft)", fontSize:12, textAlign:"center", padding:"8px 0"}}>Sin cliente seleccionado</div>
+              <div style={{color: errors.cuenta ? "var(--danger)" : "var(--soft)", fontSize:12, textAlign:"center", padding:"8px 0"}}>Sin {cuentaLow} seleccionado</div>
             )}
-            {showCliente && (
+            {showSearch && (
               <div style={{marginTop:12, paddingTop:12, borderTop:"1px solid var(--line)"}}>
                 <AccountSearchInput
-                  onSelect={(c) => { setCliente(c); setShowCliente(false); setErrors(prev => ({...prev, cliente:''})); }}
-                  placeholder="Buscar cliente…"
+                  onSelect={(ct) => { setCuenta(ct); setShowSearch(false); setErrors(prev => ({...prev, cuenta:''})); }}
+                  placeholder={`Buscar ${cuentaLow}…`}
                   showSinNombre={true}
-                  take={5}
                   autoFocus={true}
+                  {...searchProps}
                 />
               </div>
             )}
           </Card>
-          <FieldErr msg={errors.cliente}/>
+          <FieldErr msg={errors.cuenta}/>
         </div>
+        {extraFields}
         <div className="field"><label className="label">Fecha</label>
-          <input className="input" type="date" ref={fechaRef} defaultValue={cotizacion.fecha_raw}/>
+          <input className="input" type="date" ref={fechaRef} defaultValue={initial.fecha_raw}/>
         </div>
-        <div className="field"><label className="label">Observación <span style={{fontSize:10,color:"var(--soft)",fontWeight:400}}>(opcional)</span></label>
-          <textarea className="input" rows="3" maxLength={191} ref={obsRef} defaultValue={cotizacion.observacion ?? ''} placeholder="Nombre/teléfono del cliente, términos, vigencia…"></textarea>
-        </div>
+        {showObservacion && (
+          <div className="field"><label className="label">Observación <span style={{fontSize:10,color:"var(--soft)",fontWeight:400}}>(opcional)</span></label>
+            <textarea className="input" rows="3" maxLength={191} ref={obsRef} defaultValue={initial.observacion ?? ''} placeholder={obsPlaceholder || ''}></textarea>
+          </div>
+        )}
       </div>
     </FormModal>
   );
@@ -1339,7 +1345,7 @@ export function NombreFormModal({ onClose, onSaved, edit, label, icon, onSave })
 Object.assign(window, {
   FormModal,
   CompraFormModal, PedidoFormModal, EnvioFormModal, EnvioEncabezadoModal,
-  CotizacionFormModal, CotizacionEncabezadoModal, ProductoFormModal, CuentaFormModal,
+  CotizacionFormModal, EncabezadoModal, ProductoFormModal, CuentaFormModal,
   SucursalFormModal, UsuarioFormModal, RolFormModal,
   MedioFormModal, NombreFormModal,
 });
