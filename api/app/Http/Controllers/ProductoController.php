@@ -497,9 +497,11 @@ class ProductoController extends Controller
             'unidad'       => 'nullable|string|max:10',
             // Los precios faltantes se guardan en 0 (las columnas son NOT NULL): un alta sin
             // algún precio reventaba el INSERT pese a marcarse "(opcional)" en el formulario.
-            'p_comp'       => 'nullable|numeric|min:0',
-            'p_norm'       => 'nullable|numeric|min:0',
-            'p_fact'       => 'nullable|numeric|min:0',
+            // `max:9999999.99` = tope de la columna DECIMAL(9,2). Sin él, un precio mayor con
+            // STRICT_TRANS_TABLES dispara SQL 1264 (out of range) → 500; con el max es 422 limpio.
+            'p_comp'       => 'nullable|numeric|min:0|max:9999999.99',
+            'p_norm'       => 'nullable|numeric|min:0|max:9999999.99',
+            'p_fact'       => 'nullable|numeric|min:0|max:9999999.99',
         ]);
         $data['p_comp'] = $request->filled('p_comp') ? (float) $request->p_comp : 0;
         $data['p_norm'] = $request->filled('p_norm') ? (float) $request->p_norm : 0;
@@ -519,9 +521,11 @@ class ProductoController extends Controller
             'marca_id'     => 'required|integer|exists:marcas,id',
             'industria_id' => 'required|integer|exists:industrias,id',
             'unidad'       => 'nullable|string|max:10',
-            'p_comp'       => 'nullable|numeric|min:0',
-            'p_norm'       => 'nullable|numeric|min:0',
-            'p_fact'       => 'nullable|numeric|min:0',
+            // `max:9999999.99` = tope de la columna DECIMAL(9,2): sin él, un precio mayor revienta
+            // el UPDATE con SQL 1264 → 500 (STRICT mode). Con el max es un 422 limpio.
+            'p_comp'       => 'nullable|numeric|min:0|max:9999999.99',
+            'p_norm'       => 'nullable|numeric|min:0|max:9999999.99',
+            'p_fact'       => 'nullable|numeric|min:0|max:9999999.99',
         ]);
 
         // Los precios son opcionales: si no vienen, se conserva el valor actual

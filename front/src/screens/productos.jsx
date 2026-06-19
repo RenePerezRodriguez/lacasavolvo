@@ -353,11 +353,11 @@ export function ProductoDetail({ productoId, productoData, onNav, user, effectiv
                   {label:"Código",    value: p.codigo},
                   {label:"Marca",     value: p.marca},
                   {label:"Industria", value: p.industria},
-                  {label:"P. Normal", value: `Bs ${p.p_norm}`},
-                  {label:"P. Factura",value: `Bs ${p.p_fact}`},
+                  {label:"P. Normal", value: `Bs ${money(p.p_norm)}`},
+                  {label:"P. Factura",value: `Bs ${money(p.p_fact)}`},
                   // P. Compra (COSTO) solo a quien puede ver costos: el backend manda
                   // p_comp=null si no → ocultamos la fila (no mostramos "—" engañoso).
-                  ...(p.p_comp != null ? [{label:"P. Compra", value: `Bs ${p.p_comp}`}] : []),
+                  ...(p.p_comp != null ? [{label:"P. Compra", value: `Bs ${money(p.p_comp)}`}] : []),
                   {label:"Estado",    value: p.estado === "ON" ? "Activo" : "Descontinuado"},
                 ].map(r => (
                   <div key={r.label} className="row" style={{justifyContent:"space-between",fontSize:12}}>
