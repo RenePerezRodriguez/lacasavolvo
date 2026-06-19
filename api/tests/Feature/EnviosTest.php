@@ -52,6 +52,22 @@ class EnviosTest extends TestCase
         $this->assertDatabaseHas('envios', ['id' => $response->json('id'), 'estado' => 'PROFORMA']);
     }
 
+    public function test_show_devuelve_observacion(): void
+    {
+        // Regresión (mismo patrón que cotizaciones): el envío tiene `observacion` que el
+        // legacy mostraba (199 envíos en prod la tienen). show() debe devolverla.
+        $user  = $this->actingAsUser();
+        $medio = Medio::factory()->create();
+        $envio = Envio::factory()->create([
+            'sucursal_id' => $user->sucursal_id, 'cuenta_id' => 2, 'medio_id' => $medio->id,
+            'estado' => 'PROFORMA', 'observacion' => 'LLEGO DE SANTA CRUZ',
+        ]);
+
+        $this->getJson("/api/envios/{$envio->id}")
+            ->assertStatus(200)
+            ->assertJsonPath('observacion', 'LLEGO DE SANTA CRUZ');
+    }
+
     public function test_agregar_item_crea_detalle_en_db(): void
     {
         $user = $this->actingAsUser();

@@ -309,6 +309,7 @@ export function EnvioEncabezadoModal({ envio, onClose, onSaved }) {
   const fechaRef  = useRef();
   const montoRef  = useRef();
   const pagadoRef = useRef();
+  const obsRef    = useRef();
 
   useEffect(() => {
     Promise.all([sucursalesApi.list(), mediosApi.list()])
@@ -332,6 +333,7 @@ export function EnvioEncabezadoModal({ envio, onClose, onSaved }) {
         medio_id:  medioId,
         monto:     montoRef.current.value || 0,
         pagado:    pagadoRef.current.value,
+        observacion: obsRef.current.value,
       });
       toast('Encabezado actualizado', 'success');
       onSaved && onSaved();
@@ -380,6 +382,11 @@ export function EnvioEncabezadoModal({ envio, onClose, onSaved }) {
               <option value="POR PAGAR">Por pagar</option>
             </select>
           </div>
+        </div>
+        <div className="field"><label className="label">Observación <span style={{fontSize:10,color:"var(--soft)",fontWeight:400}}>(opcional)</span></label>
+          {/* El legacy guardaba y mostraba notas del envío (ej. "LLEGO DE SANTA CRUZ"); el
+              sistema nuevo las había perdido. Se vuelve a poder ver/editar (regresión de QA). */}
+          <textarea className="input" rows="2" maxLength={191} ref={obsRef} defaultValue={envio.observacion ?? ''} placeholder="Nota del envío (ej. transporte, referencia…)"></textarea>
         </div>
       </div>
     </FormModal>

@@ -417,6 +417,14 @@ export function EnvioDetail({ envioId, envioData, onNav }) {
                   <span style={{fontWeight:600,color:"var(--ink)"}}>{r.value}</span>
                 </div>
               ))}
+              {/* Observación del envío: el legacy la mostraba (ej. "LLEGO DE SANTA CRUZ");
+                  se había perdido en el sistema nuevo. Se muestra si tiene contenido. */}
+              {e?.observacion && (
+                <div style={{fontSize:12, borderTop:"1px solid var(--line)", paddingTop:8, marginTop:2}}>
+                  <span style={{color:"var(--soft)"}}>Observación</span>
+                  <div style={{marginTop:4, color:"var(--ink)", fontWeight:500, whiteSpace:"pre-wrap", lineHeight:1.4}}>{e.observacion}</div>
+                </div>
+              )}
             </div>
           </Card>
         </div>

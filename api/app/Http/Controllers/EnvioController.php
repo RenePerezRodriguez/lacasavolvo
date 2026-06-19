@@ -148,6 +148,10 @@ class EnvioController extends Controller
             'medio_id'  => $envio->medio_id,
             'monto_num' => (float) ($envio->monto ?? 0),
             'pagado'    => $envio->pagado,
+            // `observacion` faltaba en la respuesta → el detalle no mostraba las notas del
+            // envío (ej. "LLEGO DE SANTA CRUZ") que el legacy SÍ mostraba (regresión de QA,
+            // mismo patrón que cotizaciones). 199 envíos en prod la tienen cargada.
+            'observacion' => $envio->observacion ?? '',
             // Solo el ORIGEN puede editar un envío en PROFORMA (la misma frontera que
             // imponen agregarItem/updateItem/deleteItem/updateEncabezado con abort_if 403).
             // El destino (cuenta_id) y cualquier otra sucursal lo ven en SOLO-LECTURA.
@@ -172,10 +176,12 @@ class EnvioController extends Controller
             'monto'     => 'nullable|numeric|min:0',
             // Mismo contrato que `store`: el flete solo se cobra con PAGADO/POR PAGAR.
             'pagado'    => 'nullable|in:PAGADO,POR PAGAR',
+            // varchar(191): cap explícito para no reventar el UPDATE con 192+ chars (1406→500).
+            'observacion' => 'nullable|string|max:191',
         ]);
         abort_if($request->fecha <= Auth::user()->sucursal->ultimo_cierre, 422, 'Fecha fuera de rango (caja cerrada).');
-        
-        $envio->update($request->only(['cuenta_id','fecha','medio_id','monto','pagado']));
+
+        $envio->update($request->only(['cuenta_id','fecha','medio_id','monto','pagado','observacion']));
         return response()->json(true);
     }
 
