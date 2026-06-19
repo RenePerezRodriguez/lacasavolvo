@@ -48,6 +48,12 @@ export function Caja({ onNav, sucursalId, user, effectivePermissions }) {
   const [cerrandoConf, setCerrandoConf]   = useState(false);
   const [editingId, setEditingId]         = useState(null);
   const [editDesc, setEditDesc]           = useState('');
+  // Edición de un movimiento ya registrado: además de la descripción, ahora se puede cambiar
+  // la fecha y el monto (pedido de QA — el backend ya lo soportaba en updateTranza).
+  const [editFecha, setEditFecha]         = useState('');   // YYYY-MM-DD para el <input type="date">
+  const [editMonto, setEditMonto]         = useState('');
+  // La API devuelve la fecha como DD/MM/YYYY (display); el <input type="date"> necesita YYYY-MM-DD.
+  const toInputDate = (s) => { const [d, m, y] = String(s).split('/'); return (y && m && d) ? `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}` : ''; };
   const canOperate = (effectivePermissions || []).some(p => p === 'caja.apertura' || p === 'caja.ingreso' || p === 'caja.egreso' || p === 'caja.cierre');
 
   function cargar() {
@@ -105,7 +111,12 @@ export function Caja({ onNav, sucursalId, user, effectivePermissions }) {
     if (!editDesc.trim()) return;
     setSaving(true);
     try {
-      await cajaApi.updateTranza({ tranza_id: id, descripcion: editDesc });
+      await cajaApi.updateTranza({
+        tranza_id: id,
+        descripcion: editDesc,
+        fecha: editFecha || undefined,
+        monto: editMonto && parseFloat(editMonto) > 0 ? parseFloat(editMonto) : undefined,
+      });
       setEditingId(null);
       cargar();
     } catch (err) {
@@ -216,7 +227,9 @@ export function Caja({ onNav, sucursalId, user, effectivePermissions }) {
             <DataTable
               data={movs}
               columns={[
-                { key: 'fecha', title: 'Fecha', width: 110, render: m => <span className="mono" style={{color:"var(--soft)", fontSize:11}}>{m.fecha}</span> },
+                { key: 'fecha', title: 'Fecha', width: 130, render: m => editingId === m.id
+                    ? <input className="input" type="date" value={editFecha} max={new Date().toISOString().slice(0,10)} onChange={e=>setEditFecha(e.target.value)} style={{fontSize:11, padding:"4px 6px"}}/>
+                    : <span className="mono" style={{color:"var(--soft)", fontSize:11}}>{m.fecha}</span> },
                 {
                   key: 'tipo', title: 'Tipo', width: 110,
                   render: m => (
@@ -250,8 +263,12 @@ export function Caja({ onNav, sucursalId, user, effectivePermissions }) {
                     );
                   }
                 },
-                { key: 'ingreso', title: 'Ingreso', width: 140, align: 'right', render: m => m.ingreso > 0 ? <span className="mono tabular" style={{fontWeight:700, color:"var(--success)"}}>Bs {m.ingreso.toLocaleString(undefined,{minimumFractionDigits:2})}</span> : <span className="mono tabular" style={{color:"var(--soft)"}}>—</span> },
-                { key: 'egreso', title: 'Egreso', width: 140, align: 'right', render: m => m.egreso > 0 ? <span className="mono tabular" style={{fontWeight:700, color:"var(--warning)"}}>Bs {m.egreso.toLocaleString(undefined,{minimumFractionDigits:2})}</span> : <span className="mono tabular" style={{color:"var(--soft)"}}>—</span> },
+                { key: 'ingreso', title: 'Ingreso', width: 140, align: 'right', render: m => (editingId === m.id && m.ingreso > 0)
+                    ? <input className="input mono tabular" type="number" min="0.01" step="0.01" value={editMonto} onChange={e=>setEditMonto(e.target.value)} style={{textAlign:"right", fontSize:12, padding:"4px 6px"}}/>
+                    : m.ingreso > 0 ? <span className="mono tabular" style={{fontWeight:700, color:"var(--success)"}}>Bs {m.ingreso.toLocaleString(undefined,{minimumFractionDigits:2})}</span> : <span className="mono tabular" style={{color:"var(--soft)"}}>—</span> },
+                { key: 'egreso', title: 'Egreso', width: 140, align: 'right', render: m => (editingId === m.id && m.egreso > 0)
+                    ? <input className="input mono tabular" type="number" min="0.01" step="0.01" value={editMonto} onChange={e=>setEditMonto(e.target.value)} style={{textAlign:"right", fontSize:12, padding:"4px 6px"}}/>
+                    : m.egreso > 0 ? <span className="mono tabular" style={{fontWeight:700, color:"var(--warning)"}}>Bs {m.egreso.toLocaleString(undefined,{minimumFractionDigits:2})}</span> : <span className="mono tabular" style={{color:"var(--soft)"}}>—</span> },
                 {
                   key: 'actions', title: '', width: 70, align: 'right',
                   render: m => {
@@ -267,7 +284,7 @@ export function Caja({ onNav, sucursalId, user, effectivePermissions }) {
                           </>
                         ) : (
                           <>
-                            <button className="icon-btn" title="Editar" onClick={()=>{setEditingId(m.id); setEditDesc(m.descripcion);}}><Icon name="fa-pen" style={{fontSize:10}}/></button>
+                            <button className="icon-btn" title="Editar" onClick={()=>{setEditingId(m.id); setEditDesc(m.descripcion); setEditFecha(toInputDate(m.fecha)); setEditMonto(String(m.ingreso > 0 ? m.ingreso : m.egreso));}}><Icon name="fa-pen" style={{fontSize:10}}/></button>
                             <button className="icon-btn danger" title="Eliminar" disabled={saving} onClick={()=>handleDeleteTranza(m)}><Icon name="fa-trash" style={{fontSize:10}}/></button>
                           </>
                         )}
