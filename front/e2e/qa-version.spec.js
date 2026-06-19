@@ -47,3 +47,21 @@ test('el botón Recargar limpia Cache Storage (equivalente a hard refresh)', asy
   // Tras la recarga, la caché sembrada ya no existe.
   expect(await page.evaluate(() => caches.keys())).not.toContain('lcv-test-cache');
 });
+
+test('"Después" oculta el aviso SIN recargar (para terminar la operación en curso)', async ({ page }) => {
+  await page.route('**/version.json*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: 'NUEVA-9999' }) }),
+  );
+  await page.goto('/');
+  await expect(page.getByText('Hay una versión nueva')).toBeVisible({ timeout: 15_000 });
+
+  // Marca en window: si la página recargara, esta marca se perdería.
+  await page.evaluate(() => { window.__sinRecarga = true; });
+
+  await page.getByRole('button', { name: /^Después$/ }).click();
+
+  // El aviso se ocultó…
+  await expect(page.getByText('Hay una versión nueva')).toBeHidden();
+  // …y la página NO se recargó (la marca sigue viva).
+  expect(await page.evaluate(() => window.__sinRecarga === true)).toBe(true);
+});

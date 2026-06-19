@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTweaks, TweaksPanel } from './lib/tweaks.jsx';
 import { AppLayout, SUC_COLORS, ToastProvider } from './lib/components.jsx';
 import { LoginScreen, Dashboard } from './screens/main.jsx';
@@ -28,6 +28,16 @@ import { useVersionCheck } from './lib/useVersionCheck.js';
 function UpdateBanner() {
   const [hidden, setHidden] = useState(false);
   const [reloading, setReloading] = useState(false);
+  const snoozeTimer = useRef(null);
+
+  // "Recordar más tarde": oculta el cartel SIN recargar (para que el usuario termine la
+  // operación que está haciendo) y lo vuelve a mostrar a los 5 min, así no se olvidan de
+  // actualizar. Se limpia el timer al desmontar.
+  useEffect(() => () => clearTimeout(snoozeTimer.current), []);
+  const snooze = () => {
+    setHidden(true);
+    snoozeTimer.current = setTimeout(() => setHidden(false), 5 * 60 * 1000);
+  };
 
   /**
    * Recarga "fuerte": JS no puede disparar literalmente Ctrl+Shift+R, pero esto logra
@@ -62,7 +72,7 @@ function UpdateBanner() {
       <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:6}}>
         <i className="fa-solid fa-arrows-rotate" style={{color:'var(--accent)', fontSize:14}}/>
         <strong style={{fontSize:13.5}}>Hay una versión nueva</strong>
-        <button onClick={() => setHidden(true)} title="Ocultar" aria-label="Ocultar aviso"
+        <button onClick={snooze} title="Recordar más tarde" aria-label="Recordar más tarde"
           style={{marginLeft:'auto', background:'none', border:'none', cursor:'pointer', color:'var(--soft)', padding:2, lineHeight:1}}>
           <i className="fa-solid fa-xmark" style={{fontSize:13}}/>
         </button>
@@ -77,6 +87,11 @@ function UpdateBanner() {
             color:'#fff', background:'var(--accent)', opacity: reloading ? .7 : 1}}>
           <i className={`fa-solid ${reloading ? 'fa-spinner fa-spin' : 'fa-rotate-right'}`} style={{marginRight:6}}/>
           {reloading ? 'Recargando…' : 'Recargar ahora'}
+        </button>
+        {/* "Después": cierra el aviso sin recargar (terminá tu operación) y reaparece en 5 min. */}
+        <button onClick={snooze} disabled={reloading}
+          style={{cursor:'pointer', border:'none', background:'none', color:'var(--soft)', fontSize:12.5, fontWeight:600, padding:'8px 4px'}}>
+          Después
         </button>
       </div>
     </div>
