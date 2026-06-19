@@ -22,3 +22,28 @@ test('overlay de versión nueva aparece al cambiar version.json', async ({ page 
   await expect(page.getByRole('button', { name: /Recargar ahora/i })).toBeVisible();
   await page.screenshot({ path: `${DIR}/20-overlay-version-nueva.png` });
 });
+
+test('el botón Recargar limpia Cache Storage (equivalente a hard refresh)', async ({ page }) => {
+  await page.route('**/version.json*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: 'NUEVA-9999' }) }),
+  );
+  await page.goto('/');
+  await expect(page.getByText('Hay una versión nueva')).toBeVisible({ timeout: 15_000 });
+
+  // Sembrar una caché falsa para comprobar que el botón la borra.
+  await page.evaluate(async () => {
+    const c = await caches.open('lcv-test-cache');
+    await c.put('/dummy', new Response('x'));
+  });
+  expect(await page.evaluate(() => caches.keys())).toContain('lcv-test-cache');
+
+  // Clic en "Recargar ahora" → borra cachés + recarga.
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'load' }),
+    page.getByRole('button', { name: /Recargar ahora/i }).click(),
+  ]);
+  await page.waitForTimeout(1200);
+
+  // Tras la recarga, la caché sembrada ya no existe.
+  expect(await page.evaluate(() => caches.keys())).not.toContain('lcv-test-cache');
+});

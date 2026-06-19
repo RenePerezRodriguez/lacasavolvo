@@ -27,6 +27,31 @@ import { useVersionCheck } from './lib/useVersionCheck.js';
  */
 function UpdateBanner() {
   const [hidden, setHidden] = useState(false);
+  const [reloading, setReloading] = useState(false);
+
+  /**
+   * Recarga "fuerte": JS no puede disparar literalmente Ctrl+Shift+R, pero esto logra
+   * el MISMO efecto — desregistra service workers y borra Cache Storage antes de recargar,
+   * así no queda nada viejo en ninguna caché. (index.html ya es no-cache y los assets son
+   * hasheados, así que el reload normal basta; esto es el cinturón + tirantes.)
+   */
+  const hardReload = async () => {
+    setReloading(true);
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+    } catch { /* sin service workers */ }
+    try {
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch { /* sin Cache API */ }
+    window.location.reload();
+  };
+
   if (hidden) return null;
   return (
     <div role="status" aria-label="Versión nueva disponible" className="fade-up"
@@ -47,12 +72,12 @@ function UpdateBanner() {
         importante (venta, cotización, caja), terminala primero</b> y recién ahí recargá.
       </p>
       <div style={{display:'flex', alignItems:'center', gap:10}}>
-        <button onClick={() => window.location.reload()}
-          style={{cursor:'pointer', border:'none', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:700,
-            color:'#fff', background:'var(--accent)'}}>
-          <i className="fa-solid fa-rotate-right" style={{marginRight:6}}/>Recargar ahora
+        <button onClick={hardReload} disabled={reloading}
+          style={{cursor: reloading ? 'wait' : 'pointer', border:'none', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:700,
+            color:'#fff', background:'var(--accent)', opacity: reloading ? .7 : 1}}>
+          <i className={`fa-solid ${reloading ? 'fa-spinner fa-spin' : 'fa-rotate-right'}`} style={{marginRight:6}}/>
+          {reloading ? 'Recargando…' : 'Recargar ahora'}
         </button>
-        <span style={{fontSize:11, color:'var(--soft)'}}>o <b>Ctrl+Shift+R</b></span>
       </div>
     </div>
   );
