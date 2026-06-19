@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useListData, useColumnVisibility } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
-import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper } from '../lib/components.jsx';
+import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader } from '../lib/components.jsx';
 import { CotizacionFormModal, CotizacionEncabezadoModal } from './forms.jsx';
 import { openPdf, cotizaciones as cotizApi } from '../services/api.js';
 
@@ -315,6 +315,21 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
       />
       {showEditEnc && c && <CotizacionEncabezadoModal cotizacion={c} onClose={()=>setShowEditEnc(false)} onSaved={reloadHeader}/>}
       {error && <div style={{padding:"10px 14px",background:"var(--danger-soft)",border:"1px solid rgba(220,38,38,.25)",borderRadius:"var(--r-md)",fontSize:13,color:"var(--danger)",display:"flex",gap:8,alignItems:"center"}}><Icon name="fa-circle-exclamation" style={{fontSize:12,flexShrink:0}}/><span>{error}</span></div>}
+
+      {/* Encabezado / intro arriba (pedido de QA): el cliente y la observación van como cabecera
+          del documento ANTES del detalle de productos, no en el panel de la derecha. */}
+      <DocHeader
+        title="Cotización"
+        subtitle="Datos del cliente y la proforma"
+        fields={[
+          { label: "N° Cotización", value: `#${cotizacionId}` },
+          { label: "Cliente", value: c?.cuenta ?? '—' },
+          { label: "Fecha", value: c?.fecha ?? '—' },
+        ]}
+        observacion={c?.observacion ?? ''}
+        status={<StatusBadge value={estado} label={COTIZ_ESTADO_LABEL[estado]}/>}
+      />
+
       <div className="grid-12">
         <div className="stack" style={{"--gap":"16px"}}>
           {editable && (
@@ -334,7 +349,6 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
                 <Badge tone="neutral">{detalles.length}</Badge>
                 {saving && <Icon name="fa-spinner fa-spin" style={{fontSize:12,color:"var(--soft)"}}/>}
               </div>
-              <StatusBadge value={estado} label={COTIZ_ESTADO_LABEL[estado]}/>
             </div>
             {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-file-invoice"/> : (
               <table className="tbl">
@@ -431,12 +445,6 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
           </Card>
           <Card title="Resumen">
             <div className="stack" style={{"--gap":"10px"}}>
-              {[{label:"N° Cotización",value:`#${cotizacionId}`},{label:"Cliente",value:c?.cuenta??'—'},{label:"Fecha",value:c?.fecha??'—'}].map(r => (
-                <div key={r.label} className="row" style={{justifyContent:"space-between",fontSize:12}}>
-                  <span style={{color:"var(--soft)"}}>{r.label}</span>
-                  <span style={{fontWeight:600,color:"var(--ink)"}}>{r.value}</span>
-                </div>
-              ))}
               <div className="row" style={{justifyContent:"space-between",fontSize:12,alignItems:"center"}}>
                 <span style={{color:"var(--soft)"}}>Subtotal</span>
                 <span style={{fontWeight:600,color:"var(--ink)"}}>Bs {montoNum.toFixed(2)}</span>
@@ -449,16 +457,6 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
               <div className="row" style={{justifyContent:"space-between",fontSize:13}}>
                 <span style={{fontWeight:700,color:"var(--ink)"}}>Total</span>
                 <span style={{fontWeight:700,color:"var(--ink)"}}>Bs {totalNum.toFixed(2)}</span>
-              </div>
-              {/* Observación: el legacy guardaba aquí datos del cliente (nombre/teléfono)
-                  cuando la cuenta era genérica "SIN NOMBRE". Se muestra siempre para que
-                  esos datos no queden ocultos (regresión de QA). */}
-              <div style={{height:1,background:"var(--line)",margin:"4px 0"}}></div>
-              <div style={{fontSize:12}}>
-                <span style={{color:"var(--soft)"}}>Observación</span>
-                <div style={{marginTop:4, color: c?.observacion ? "var(--ink)" : "var(--soft)", fontWeight:500, whiteSpace:"pre-wrap", lineHeight:1.4}}>
-                  {c?.observacion || 'Sin observación'}
-                </div>
               </div>
             </div>
           </Card>

@@ -454,3 +454,80 @@ export function AccountSearchInput({ onSelect, tipoFiltro = null, showSinNombre 
     </div>
   );
 }
+
+
+/**
+ * Combo con búsqueda por tipeo para listas chicas (medios, etc.). Reemplaza un `<select>`
+ * cuando el usuario quiere escribir y filtrar (pedido de QA en Envíos → medio de transporte),
+ * en vez de scrollear el desplegable nativo.
+ *
+ * @param {Object}   props
+ * @param {Array<{id:(number|string), nombre:string}>} props.options  Opciones a elegir.
+ * @param {(number|string|null)} props.value      Id seleccionado (o null/'' sin selección).
+ * @param {(id:string)=>void}    props.onChange   Callback con el id elegido (string).
+ * @param {string}  [props.placeholder]           Texto del input vacío.
+ * @param {boolean} [props.invalid]               Marca el borde en rojo (validación).
+ * @param {boolean} [props.disabled]
+ * @returns {JSX.Element}
+ */
+export function ComboSelect({ options = [], value, onChange, placeholder = 'Buscar…', invalid = false, disabled = false }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const boxRef = useRef(null);
+  const selected = options.find(o => String(o.id) === String(value)) || null;
+
+  // Cerrar al hacer clic fuera.
+  useEffect(() => {
+    const onDoc = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) { setOpen(false); setQuery(''); } };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  const q = query.trim().toLowerCase();
+  const filtered = q ? options.filter(o => (o.nombre || '').toLowerCase().includes(q)) : options;
+
+  const pick = (o) => { onChange(String(o.id)); setOpen(false); setQuery(''); };
+
+  return (
+    <div ref={boxRef} style={{ position: 'relative' }}>
+      <div className="input-group">
+        <Icon name="fa-solid fa-magnifying-glass" className="lead-icon" />
+        <input
+          className="input"
+          disabled={disabled}
+          placeholder={selected ? selected.nombre : placeholder}
+          value={open ? query : (selected ? selected.nombre : '')}
+          onFocus={() => { if (!disabled) { setOpen(true); setQuery(''); } }}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          style={invalid ? { borderColor: 'var(--danger)' } : undefined}
+          aria-label={placeholder}
+        />
+      </div>
+      {open && (
+        <div className="card" style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 60,
+          maxHeight: 220, overflowY: 'auto', padding: 4, boxShadow: '0 8px 24px rgba(15,23,42,.14)'
+        }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: '10px 12px', fontSize: 13, color: 'var(--soft)' }}>Sin coincidencias</div>
+          ) : filtered.map(o => {
+            const sel = String(o.id) === String(value);
+            return (
+              <button key={o.id} type="button" onMouseDown={(e) => { e.preventDefault(); pick(o); }}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
+                  borderRadius: 'var(--r-md)', border: 'none', cursor: 'pointer', fontSize: 13,
+                  background: sel ? 'var(--accent-a15)' : 'transparent',
+                  color: sel ? 'var(--accent)' : 'var(--ink)', fontWeight: sel ? 700 : 500
+                }}
+                onMouseEnter={(e) => { if (!sel) e.currentTarget.style.background = 'var(--bg)'; }}
+                onMouseLeave={(e) => { if (!sel) e.currentTarget.style.background = 'transparent'; }}>
+                {o.nombre}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

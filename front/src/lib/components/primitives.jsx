@@ -4,7 +4,7 @@
  * Todos los estilos dependen del design system en index.css (variables CSS globales).
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 
 /**
@@ -132,6 +132,59 @@ export function Card({ title, meta, children, pad = true, head, elev, className 
         </div>
       )}
       <div className={pad ? "card-pad" : ""}>{children}</div>
+    </div>
+  );
+}
+
+
+/**
+ * Cabecera / intro de un documento (cotización, venta, compra, pedido, envío).
+ * Muestra el encabezado ARRIBA como introducción —subtítulo, datos clave del
+ * documento y la observación— antes del detalle de ítems (pedido de René/QA:
+ * "el cliente arriba como cabecera, luego los productos").
+ *
+ * @param {object} props
+ * @param {string}  [props.title]        Título del card (por defecto "Encabezado").
+ * @param {string}  [props.subtitle]     Subtítulo descriptivo del card.
+ * @param {Array<{label:string, value:React.ReactNode}>} [props.fields]  Datos clave del encabezado.
+ * @param {string}  [props.observacion]  Texto de observación; si se pasa la prop (aunque sea ''), se muestra el bloque.
+ * @param {string}  [props.observacionLabel]  Etiqueta del bloque de observación (def. "Observación").
+ * @param {React.ReactNode} [props.status]    Badge de estado, va en la esquina superior derecha.
+ * @returns {JSX.Element}
+ */
+export function DocHeader({ title = "Encabezado", subtitle, fields = [], observacion, observacionLabel = "Observación", status }) {
+  return (
+    <div className="card">
+      <div className="card-pad">
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>{title}</div>
+            {subtitle && <div style={{ fontSize: 12, color: "var(--soft)", marginTop: 2 }}>{subtitle}</div>}
+          </div>
+          {status}
+        </div>
+        {fields.length > 0 && (
+          <div className="row" style={{ gap: 28, flexWrap: "wrap", marginTop: 14 }}>
+            {fields.map((f) => (
+              <div key={f.label}>
+                <div style={{ fontSize: 10.5, color: "var(--soft)", textTransform: "uppercase", letterSpacing: ".04em", fontWeight: 700 }}>{f.label}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", marginTop: 2 }}>{f.value}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {observacion !== undefined && (
+          <>
+            <div style={{ height: 1, background: "var(--line)", margin: "14px 0 10px" }} />
+            <div>
+              <div style={{ fontSize: 10.5, color: "var(--soft)", textTransform: "uppercase", letterSpacing: ".04em", fontWeight: 700 }}>{observacionLabel}</div>
+              <div style={{ marginTop: 4, fontSize: 13, color: observacion ? "var(--ink)" : "var(--soft)", fontWeight: 500, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+                {observacion || "Sin observación"}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -376,15 +429,26 @@ export function CopyableCode({ code, style = {}, codeStyle = {}, title = "Copiar
  */
 export function QtyStepper({ value, onChange, min = 1, max = 100000, disabled = false }) {
   const [draft, setDraft] = useState(String(value));
+  const autoTimer = useRef(null);
   // Re-sincroniza el draft cuando el valor confirmado cambia desde afuera (reload tras guardar).
   useEffect(() => { setDraft(String(value)); }, [value]);
+  useEffect(() => () => clearTimeout(autoTimer.current), []);
 
-  const commit = () => {
-    let n = parseInt(draft, 10);
+  const commitVal = (raw) => {
+    let n = parseInt(raw, 10);
     if (isNaN(n)) { setDraft(String(value)); return; }   // texto vacío/inválido → revertir
     n = Math.max(min, Math.min(max, n));
     setDraft(String(n));
     if (n !== value) onChange(n);
+  };
+  const commit = () => { clearTimeout(autoTimer.current); commitVal(draft); };
+
+  // Auto-commit con debounce al ESCRIBIR: actualiza el subtotal sin tener que hacer clic
+  // afuera (pedido de QA: "cambio la cantidad y no se actualiza hasta clickear en otro lado").
+  const onType = (val) => {
+    setDraft(val);
+    clearTimeout(autoTimer.current);
+    autoTimer.current = setTimeout(() => commitVal(val), 550);
   };
 
   const step = (delta) => {
@@ -399,7 +463,7 @@ export function QtyStepper({ value, onChange, min = 1, max = 100000, disabled = 
         title="Disminuir" style={{width:30, height:30, color:"var(--soft)"}}><Icon name="fa-minus" style={{fontSize:10}}/></button>
       <input className="mono tabular" type="text" inputMode="numeric" value={draft} disabled={disabled}
         aria-label="Cantidad"
-        onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ''))}
+        onChange={(e) => onType(e.target.value.replace(/[^0-9]/g, ''))}
         onFocus={(e) => e.target.select()}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}

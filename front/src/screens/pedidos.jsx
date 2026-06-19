@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useListData, useColumnVisibility } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
-import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, CopyableCode } from '../lib/components.jsx';
+import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, CopyableCode, DocHeader } from '../lib/components.jsx';
 import { PedidoFormModal } from './forms.jsx';
 import { openPdf, pedidos as pedidosApi } from '../services/api.js';
 
@@ -226,7 +226,22 @@ export function PedidoDetail({ pedidoId, pedidoData, onNav }) {
         </>}
       />
       {error && <div style={{padding:"10px 14px",background:"var(--danger-soft)",border:"1px solid rgba(220,38,38,.25)",borderRadius:"var(--r-md)",fontSize:13,color:"var(--danger)",display:"flex",gap:8,alignItems:"center"}}><Icon name="fa-circle-exclamation" style={{fontSize:12,flexShrink:0}}/><span>{error}</span></div>}
-      <div className="grid-12">
+
+      {/* Encabezado / intro arriba (mismo patrón que cotizaciones, pedido de René). */}
+      <DocHeader
+        title="Pedido"
+        subtitle="Datos del pedido interno"
+        fields={[
+          { label: "N° Pedido", value: `#${pedidoId}` },
+          { label: "Sucursal", value: p?.sucursal ?? '—' },
+          { label: "Fecha", value: p?.fecha ?? '—' },
+        ]}
+        observacion={p?.observacion ?? ''}
+        status={<StatusBadge value={estado}/>}
+      />
+
+      {/* Sin panel derecho (pedido no-PROFORMA) → los ítems ocupan todo el ancho. */}
+      <div className="grid-12" style={estado !== 'PROFORMA' ? { gridTemplateColumns: '1fr' } : undefined}>
         <div className="stack" style={{"--gap":"16px"}}>
           {estado === 'PROFORMA' && (
             // Buscador ANCLADO (sticky) — se mantiene fijo al hacer scroll de los ítems (QA).
@@ -245,7 +260,6 @@ export function PedidoDetail({ pedidoId, pedidoData, onNav }) {
                 <Badge tone="neutral">{detalles.length}</Badge>
                 {saving && <Icon name="fa-spinner fa-spin" style={{fontSize:12,color:"var(--soft)"}}/>}
               </div>
-              <StatusBadge value={estado}/>
             </div>
             {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-clipboard-list"/> : (
               // Detalle desglosado en columnas (ID · Código · Descripción · Marca) como en
@@ -281,44 +295,33 @@ export function PedidoDetail({ pedidoId, pedidoData, onNav }) {
           </Card>
         </div>
         <div className="stack" style={{"--gap":"16px"}}>
+          {/* Acciones solo en PROFORMA (editar observación / validar). Los datos del encabezado
+              ahora viven arriba en el DocHeader, así que el Resumen redundante se quitó. */}
+          {estado === 'PROFORMA' && (
           <Card title="Acciones">
             <div className="stack" style={{"--gap":"10px"}}>
-              {estado === 'PROFORMA' && (
-                <>
-                  <div className="field">
-                    <label className="label" style={{fontSize:11,marginBottom:4,display:'block',color:'var(--soft)'}}>Observación</label>
-                    {/* maxLength=191: coincide con el cap del backend (columna varchar(191))
-                        para que el usuario no tipee de más y reciba un 422 al guardar. */}
-                    <textarea className="input" rows={3} placeholder="Notas del pedido…" maxLength={191}
-                      value={obsEdit ?? (p?.observacion ?? '')}
-                      onChange={e => setObsEdit(e.target.value)}
-                      onBlur={saveObs}
-                      style={{resize:'vertical',fontSize:12,lineHeight:1.5}}/>
-                  </div>
-                  <Button variant="secondary" size="md"
-                    icon={saving ? "fa-spinner fa-spin" : "fa-save"}
-                    onClick={async ()=>{ await saveObs(); }}
-                    style={{width:"100%"}}>
-                    {saving ? "Guardando…" : "Guardar cambios"}
-                  </Button>
-                  <Button variant="accent" size="lg" icon="fa-check"
-                    disabled={detalles.length===0||saving} onClick={handleValidar} style={{width:"100%"}}>
-                    {saving ? <><Icon name="fa-spinner fa-spin" style={{marginRight:6}}/>Procesando…</> : 'Validar pedido'}
-                  </Button>
-                </>
-              )}
+              <div className="field">
+                <label className="label" style={{fontSize:11,marginBottom:4,display:'block',color:'var(--soft)'}}>Observación</label>
+                {/* maxLength=191: coincide con el cap del backend (columna varchar(191)). */}
+                <textarea className="input" rows={3} placeholder="Notas del pedido…" maxLength={191}
+                  value={obsEdit ?? (p?.observacion ?? '')}
+                  onChange={e => setObsEdit(e.target.value)}
+                  onBlur={saveObs}
+                  style={{resize:'vertical',fontSize:12,lineHeight:1.5}}/>
+              </div>
+              <Button variant="secondary" size="md"
+                icon={saving ? "fa-spinner fa-spin" : "fa-save"}
+                onClick={async ()=>{ await saveObs(); }}
+                style={{width:"100%"}}>
+                {saving ? "Guardando…" : "Guardar cambios"}
+              </Button>
+              <Button variant="accent" size="lg" icon="fa-check"
+                disabled={detalles.length===0||saving} onClick={handleValidar} style={{width:"100%"}}>
+                {saving ? <><Icon name="fa-spinner fa-spin" style={{marginRight:6}}/>Procesando…</> : 'Validar pedido'}
+              </Button>
             </div>
           </Card>
-          <Card title="Resumen">
-            <div className="stack" style={{"--gap":"10px"}}>
-              {[{label:"N° Pedido",value:`#${pedidoId}`},{label:"Sucursal",value:p?.sucursal??'—'},{label:"Fecha",value:p?.fecha??'—'},{label:"Estado",value:estado},...(p?.observacion?[{label:"Observación",value:p.observacion}]:[])].map(r => (
-                <div key={r.label} className="row" style={{justifyContent:"space-between",fontSize:12}}>
-                  <span style={{color:"var(--soft)"}}>{r.label}</span>
-                  <span style={{fontWeight:600,color:"var(--ink)"}}>{r.value}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
+          )}
         </div>
       </div>
     </div>

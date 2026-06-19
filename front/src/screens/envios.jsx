@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { useListData, useColumnVisibility } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
-import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper } from '../lib/components.jsx';
+import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader } from '../lib/components.jsx';
 import { EnvioFormModal, EnvioEncabezadoModal } from './forms.jsx';
 import { openPdf, envios as enviosApi } from '../services/api.js';
 
@@ -292,6 +292,23 @@ export function EnvioDetail({ envioId, envioData, onNav }) {
           ))}
         </div>
       )}
+
+      {/* Encabezado / intro arriba (mismo patrón que cotizaciones, pedido de René). */}
+      <DocHeader
+        title="Envío"
+        subtitle="Movimiento de stock entre sucursales"
+        fields={[
+          { label: "N° Envío", value: `#${envioId}` },
+          { label: "Origen", value: e?.origen ?? '—' },
+          { label: "Destino", value: e?.destino ?? '—' },
+          { label: "Medio", value: e?.medio ?? '—' },
+          { label: "Fecha", value: e?.fecha ?? '—' },
+          { label: "Monto", value: e?.monto ?? '—' },
+        ]}
+        observacion={e?.observacion ?? ''}
+        status={<StatusBadge value={estado}/>}
+      />
+
       <div className="grid-12">
         <div className="stack" style={{"--gap":"16px"}}>
           {editable && (
@@ -311,7 +328,6 @@ export function EnvioDetail({ envioId, envioData, onNav }) {
                 <Badge tone="neutral">{detalles.length}</Badge>
                 {saving && <Icon name="fa-spinner fa-spin" style={{fontSize:12,color:"var(--soft)"}}/>}
               </div>
-              <StatusBadge value={estado}/>
             </div>
             {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-truck"/> : (
               <table className="tbl">
@@ -405,24 +421,6 @@ export function EnvioDetail({ envioId, envioData, onNav }) {
                     : estado === 'RECIBIDO' ? 'Envío recibido.'
                     : estado === 'ANULADO' ? 'Envío anulado.'
                     : 'Sin acciones disponibles para tu sucursal.'}
-                </div>
-              )}
-            </div>
-          </Card>
-          <Card title="Resumen">
-            <div className="stack" style={{"--gap":"10px"}}>
-              {[{label:"N° Envío",value:`#${envioId}`},{label:"Origen",value:e?.origen??'—'},{label:"Destino",value:e?.destino??'—'},{label:"Medio",value:e?.medio??'—'},{label:"Fecha",value:e?.fecha??'—'},{label:"Monto",value:e?.monto??'—'}].map(r => (
-                <div key={r.label} className="row" style={{justifyContent:"space-between",fontSize:12}}>
-                  <span style={{color:"var(--soft)"}}>{r.label}</span>
-                  <span style={{fontWeight:600,color:"var(--ink)"}}>{r.value}</span>
-                </div>
-              ))}
-              {/* Observación del envío: el legacy la mostraba (ej. "LLEGO DE SANTA CRUZ");
-                  se había perdido en el sistema nuevo. Se muestra si tiene contenido. */}
-              {e?.observacion && (
-                <div style={{fontSize:12, borderTop:"1px solid var(--line)", paddingTop:8, marginTop:2}}>
-                  <span style={{color:"var(--soft)"}}>Observación</span>
-                  <div style={{marginTop:4, color:"var(--ink)", fontWeight:500, whiteSpace:"pre-wrap", lineHeight:1.4}}>{e.observacion}</div>
                 </div>
               )}
             </div>

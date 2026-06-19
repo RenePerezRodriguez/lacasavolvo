@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useListData, useColumnVisibility } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
-import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, AccountSearchInput, QtyStepper } from '../lib/components.jsx';
+import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, AccountSearchInput, QtyStepper, DocHeader } from '../lib/components.jsx';
 import { CompraFormModal } from './forms.jsx';
 import { openPdf, compras as comprasApi } from '../services/api.js';
 
@@ -270,6 +270,9 @@ export function CompraDetail({ compraId, compraData, onNav }) {
   async function handleValidar() {
     if (!window.confirm('¿Validar esta compra? El stock será actualizado.')) return;
     setError(null); setSaving(true);
+    // Cerrar el editor de encabezado al validar: si quedaba abierto, el editor (con "Guardar")
+    // seguía mostrándose aunque la compra ya no fuera PROFORMA (bug reportado por QA).
+    setEditandoResumen(false);
     try { await comprasApi.validar(compraId); await Promise.all([reloadDetalles(), reloadHeader()]); }
     catch (e) { setError(e?.response?.data?.error ?? 'Error al validar'); }
     finally { setSaving(false); }
@@ -340,6 +343,20 @@ export function CompraDetail({ compraId, compraData, onNav }) {
         </>}
       />
       {error && <div style={{padding:"10px 14px",background:"var(--danger-soft)",border:"1px solid rgba(220,38,38,.25)",borderRadius:"var(--r-md)",fontSize:13,color:"var(--danger)",display:"flex",gap:8,alignItems:"center"}}><Icon name="fa-circle-exclamation" style={{fontSize:12,flexShrink:0}}/><span>{error}</span></div>}
+
+      {/* Encabezado / intro arriba (mismo patrón que cotizaciones, pedido de René). */}
+      <DocHeader
+        title="Compra"
+        subtitle="Datos del proveedor y la compra"
+        fields={[
+          { label: "N° Compra", value: `#${compraId}` },
+          { label: "Tipo", value: c?.tipo ?? '—' },
+          { label: "Fecha", value: c?.fecha ?? '—' },
+          { label: "Proveedor", value: c?.cuenta ?? '—' },
+        ]}
+        status={<StatusBadge value={estado}/>}
+      />
+
       <div className="grid-12">
         <div className="stack" style={{"--gap":"16px"}}>
           {estado === 'PROFORMA' && (
@@ -359,7 +376,6 @@ export function CompraDetail({ compraId, compraData, onNav }) {
                 <Badge tone="neutral">{detalles.length}</Badge>
                 {saving && <Icon name="fa-spinner fa-spin" style={{fontSize:12,color:"var(--soft)"}}/>}
               </div>
-              <StatusBadge value={estado}/>
             </div>
             {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-cubes"/> : (
               <table className="tbl">
@@ -509,7 +525,9 @@ export function CompraDetail({ compraId, compraData, onNav }) {
           <Card title="Resumen" head={estado === 'PROFORMA' && !editandoResumen ? (
             <Button variant="ghost" size="sm" icon="fa-pen" onClick={() => setEditandoResumen(true)}>Editar</Button>
           ) : null}>
-            {editandoResumen ? (
+            {/* El editor solo se muestra en PROFORMA: si la compra se valida con el editor
+                abierto, no debe quedar pegado (estado terminal = solo lectura). */}
+            {editandoResumen && estado === 'PROFORMA' ? (
               <div className="stack" style={{"--gap":"10px"}}>
                 {/* N° Compra — no editable */}
                 <div className="row" style={{justifyContent:"space-between",fontSize:12}}>
@@ -560,7 +578,7 @@ export function CompraDetail({ compraId, compraData, onNav }) {
               </div>
             ) : (
               <div className="stack" style={{"--gap":"10px"}}>
-                {[{label:"N° Compra",value:`#${compraId}`},{label:"Tipo",value:c?.tipo??'—'},{label:"Fecha",value:c?.fecha??'—'},{label:"Proveedor",value:c?.cuenta??'—'},{label:"Pago",value: estado === 'VALIDO' ? (c?.pagado??'—') : '—', pago: estado === 'VALIDO'}].map(r => (
+                {[{label:"Pago",value: estado === 'VALIDO' ? (c?.pagado??'—') : '—', pago: estado === 'VALIDO'}].map(r => (
                   <div key={r.label} className="row" style={{justifyContent:"space-between",fontSize:12}}>
                     <span style={{color:"var(--soft)"}}>{r.label}</span>
                     <span style={{fontWeight:600,color: r.pago ? (c?.pagado === 'PAGADO' ? "var(--success)" : "var(--warning)") : "var(--ink)"}}>{r.value}</span>

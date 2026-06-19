@@ -422,8 +422,10 @@ h3 { font-size: 16px; font-weight: 700; }
 }
 
 .searchbar {
-  flex: 1;
-  max-width: 480px;
+  /* QA: el buscador no debe estirarse de lado a lado; va angosto y centrado en el topbar.
+     flex 0 1 (no crece) hasta 360px; el centrado lo dan los .topbar-spacer (flex:1) a cada lado. */
+  flex: 0 1 360px;
+  max-width: 360px;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -615,6 +617,7 @@ html.dark .suc-chip-pill.active { background: var(--surface); color: var(--ink);
 @media (max-width: 1100px) {
   .searchbar-text { display: none; }
   .searchbar .kbd { display: none; }
+  .topbar-spacer { display: none; }   /* en tablet/móvil el buscador-ícono vuelve a la izquierda */
   .searchbar {
     flex: 0 0 36px;
     padding: 7px 0;

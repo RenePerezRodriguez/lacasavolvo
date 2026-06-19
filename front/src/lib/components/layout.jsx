@@ -153,13 +153,10 @@ export function Topbar({ onToggleSidebar, onMobileMenu, onSearch, dark, onToggle
         <Icon name="fa-bars-staggered" />
       </button>
 
-      <button className="searchbar" onClick={onSearch}>
-        <Icon name="fa-magnifying-glass" />
-        <span className="searchbar-text">Buscar productos, ventas, clientes…</span>
-        <span className="kbd">⌘ K</span>
-      </button>
+      {/* Hora a la izquierda del selector de sucursal (pedido de René). */}
+      <span className="mono clock-display" style={{fontSize: 12, color: "var(--soft)"}}>{clock}</span>
 
-      {/* Sucursal dropdown */}
+      {/* Selector de sucursal al EXTREMO IZQUIERDO del header (pedido de René), junto al menú. */}
       <div ref={sucRef} style={{position: "relative"}}>
         <button className="sucursal-chip" onClick={() => setSucursalOpen(o => !o)}>
           <span className="dot" style={{background: suc.color}} />
@@ -190,9 +187,16 @@ export function Topbar({ onToggleSidebar, onMobileMenu, onSearch, dark, onToggle
         )}
       </div>
 
-      <span style={{flex: 1}}></span>
+      {/* Spacers a ambos lados (flex:1 c/u) → el buscador queda centrado de verdad en el topbar. */}
+      <span className="topbar-spacer" style={{flex: 1}}></span>
 
-      <span className="mono clock-display" style={{fontSize: 12, color: "var(--soft)"}}>{clock}</span>
+      <button className="searchbar" onClick={onSearch}>
+        <Icon name="fa-magnifying-glass" />
+        <span className="searchbar-text">Buscar productos, ventas, clientes…</span>
+        <span className="kbd">⌘ K</span>
+      </button>
+
+      <span style={{flex: 1}}></span>
 
       {simulatedRole && (
         <span className="sim-badge" title="Estás simulando un rol — clic en tu avatar para volver">

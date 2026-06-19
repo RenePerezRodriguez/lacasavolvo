@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Icon, Button, Card, useToast, AccountSearchInput } from '../lib/components.jsx';
+import { Icon, Button, Card, useToast, AccountSearchInput, ComboSelect } from '../lib/components.jsx';
 import logger from '../lib/logger.js';
 import { compras as comprasApi, pedidos as pedidosApi, envios as enviosApi, cuentas as cuentasApi, cotizaciones as cotizApi, medios as mediosApi, sucursales as sucursalesApi, marcas as marcasApi, industrias as industriasApi, productos as prodApi, users as usersApi, roles as rolesApi } from '../services/api.js';
 
@@ -196,9 +196,10 @@ export function EnvioFormModal({ onClose, onSaved, sucursalId }) {
   const [mediosList, setMediosList] = useState([]);
   const [saving, setSaving]         = useState(false);
   const [errors, setErrors]         = useState({});
+  // Medio controlado (ComboSelect con búsqueda por tipeo) en vez de <select> nativo (pedido de QA).
+  const [medioId, setMedioId]       = useState('');
   const cuentaRef = useRef();
   const fechaRef  = useRef();
-  const medioRef  = useRef();
   const montoRef  = useRef();
   const pagadoRef = useRef();
 
@@ -216,7 +217,7 @@ export function EnvioFormModal({ onClose, onSaved, sucursalId }) {
     if (destinos.length === 0) { e.destino = 'Aún se están cargando los destinos'; }
     // El medio es obligatorio (columna NOT NULL): se valida acá para dar un mensaje
     // claro en vez de un 500 del backend.
-    if (!medioRef.current?.value) { e.medio = 'Selecciona un medio de transporte'; }
+    if (!medioId) { e.medio = 'Selecciona un medio de transporte'; }
     if (Object.keys(e).length > 0) { setErrors(e); return; }
     setErrors({});
     setSaving(true);
@@ -224,7 +225,7 @@ export function EnvioFormModal({ onClose, onSaved, sucursalId }) {
       const res = await enviosApi.store({
         fecha:     fechaRef.current.value,
         cuenta_id: cuentaRef.current.value,
-        medio_id:  medioRef.current.value,
+        medio_id:  medioId,
         monto:     montoRef.current.value || 0,
         pagado:    pagadoRef.current.value,
       });
@@ -256,10 +257,9 @@ export function EnvioFormModal({ onClose, onSaved, sucursalId }) {
             <input className="input" type="date" ref={fechaRef} defaultValue={new Date().toISOString().slice(0,10)}/>
           </div>
           <div className="field"><label className="label">Medio de transporte <R/></label>
-            <select className="input" ref={medioRef} style={errStyle(errors.medio)} onChange={() => errors.medio && setErrors(p => ({...p, medio: ''}))}>
-              <option value="">Seleccionar medio…</option>
-              {mediosList.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-            </select>
+            <ComboSelect options={mediosList} value={medioId} invalid={!!errors.medio}
+              placeholder="Escribí para buscar…"
+              onChange={(id) => { setMedioId(id); if (errors.medio) setErrors(p => ({...p, medio: ''})); }}/>
             <FieldErr msg={errors.medio}/>
           </div>
         </div>
@@ -364,11 +364,9 @@ export function EnvioEncabezadoModal({ envio, onClose, onSaved }) {
             <input className="input" type="date" ref={fechaRef} defaultValue={envio.fecha_raw}/>
           </div>
           <div className="field"><label className="label">Medio de transporte <R/></label>
-            <select className="input" value={medioId} style={errStyle(errors.medio)}
-              onChange={e => { setMedioId(e.target.value); if (errors.medio) setErrors({}); }}>
-              <option value="">Seleccionar medio…</option>
-              {mediosList.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-            </select>
+            <ComboSelect options={mediosList} value={medioId} invalid={!!errors.medio}
+              placeholder="Escribí para buscar…"
+              onChange={(id) => { setMedioId(id); if (errors.medio) setErrors({}); }}/>
             <FieldErr msg={errors.medio}/>
           </div>
         </div>
