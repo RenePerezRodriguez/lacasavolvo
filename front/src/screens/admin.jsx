@@ -113,6 +113,15 @@ export function Sucursales({ onNav, effectivePermissions }) {
 /* ═══════════════════════════════════════════════════════════
    USUARIOS
    ═══════════════════════════════════════════════════════════ */
+/**
+ * Pantalla de Usuarios: lista del equipo con acceso por sucursal, alta/edición
+ * (UsuarioFormModal) y suspender/reactivar. Las acciones se habilitan según
+ * `canEdit` (requiere permiso `users.edit`/`users.create`); ADMIN y GERENTE lo tienen.
+ * @param {object} props
+ * @param {function(string|object): void} props.onNav - Navegación.
+ * @param {string[]} props.effectivePermissions - Permisos efectivos (reales o simulados).
+ * @returns {JSX.Element}
+ */
 export function Usuarios({ onNav, effectivePermissions }) {
   const [usuarios, setUsuarios] = useState([]);
   const [total, setTotal]       = useState(0);
@@ -126,7 +135,11 @@ export function Usuarios({ onNav, effectivePermissions }) {
   const [sort, setSort]         = useState({ col: 'name', dir: 'asc' });
   const { hiddenCols, toggleCol, visibleCols, showCols, setShowCols } = useColumnVisibility('usuarios', []);
 
-  const canEdit = (effectivePermissions || []).some(p => p.startsWith('usuarios.') && (p.endsWith('.edit') || p.endsWith('.create')));
+  // El permiso vive bajo el namespace `users.*` (seeder / rutas / ROUTE_PERMISSION), NO `usuarios.*`.
+  // Con el prefijo equivocado, canEdit era SIEMPRE false → ni GERENTE ni ADMIN veían las acciones
+  // (Nuevo usuario / Editar / Suspender). Debe quedar `users.`, igual que las pantallas hermanas
+  // (sucursales. / roles. / marcas.). Restaura la gestión de usuarios sin tocar permisos del backend.
+  const canEdit = (effectivePermissions || []).some(p => p.startsWith('users.') && (p.endsWith('.edit') || p.endsWith('.create')));
 
   const load = useCallback(() => {
     setLoading(true);

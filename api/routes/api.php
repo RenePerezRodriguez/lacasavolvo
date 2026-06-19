@@ -103,6 +103,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/historial/ventas',        [CajaController::class, 'apiHistorialVentas']);
         Route::get('/historial/efectivos',     [CajaController::class, 'apiHistorialEfectivos']);
         Route::get('/aperturas',               [CajaController::class, 'apiAperturas']);
+        // Cierres (réplica del legacy "Lista de Cierres" + ojito): lista, detalle y PDF por cierre.
+        // Definidas antes de las rutas con comodín `/{apertura}/…` para que `cierres` no se interprete
+        // como un id de apertura (segmento literal gana, pero se ordena explícito por claridad).
+        Route::get('/cierres',                  [CajaController::class, 'apiCierres']);
+        Route::get('/cierres/{cierre}/detalle', [CajaController::class, 'apiCierreDetalle']);
+        Route::get('/cierres/{cierre}/pdf',     [CajaController::class, 'cierrePdf']);
         Route::get('/{apertura}/tranzas',      [CajaController::class, 'apiTranzas']);
         Route::get('/{apertura}/compras',      [CajaController::class, 'apiCompras']);
         Route::get('/{apertura}/ventas',       [CajaController::class, 'apiVentas']);

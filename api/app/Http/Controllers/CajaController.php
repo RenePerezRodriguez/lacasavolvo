@@ -527,6 +527,139 @@ class CajaController extends Controller
         ])]);
     }
 
+    /**
+     * Lista de Cierres (réplica del legacy "Lista de Cierres"): cada cierre con la fecha de su
+     * apertura, los montos conciliados (apertura/ingresos/egresos/efectivo) y el usuario. Los datos
+     * salen de `cierres` (estado ON); no se recalcula nada (es el snapshot del momento del cierre).
+     *
+     * @param  \Illuminate\Http\Request  $request  Params opcionales: desde, hasta (rango por fecha de cierre).
+     * @return \Illuminate\Http\JsonResponse  { data: [{ id, apertura_id, fecha_apertura, fecha_cierre,
+     *         apertura, ingresos, egresos, efectivo, usuario, es_ultimo }] }
+     */
+    public function apiCierres(Request $request)
+    {
+        $sid = Auth::user()->sucursal_id;
+        $ini = $request->get('desde', Carbon::today()->subDays(30)->toDateString());
+        $fin = $request->get('hasta', Carbon::today()->toDateString());
+
+        $cierres = Cierre::with('user')
+            ->where('sucursal_id', $sid)
+            ->where('estado', 'ON')
+            ->whereBetween('fecha', [$ini, $fin])
+            ->orderBy('fecha', 'desc')->orderBy('id', 'desc')
+            ->get();
+
+        // OJO: en el modelo Cierre la COLUMNA `apertura` (monto) colisiona con la relación
+        // apertura(); $c->apertura devuelve el MONTO, no el modelo Apertura. Por eso la apertura
+        // (fecha + usuario) se resuelve aparte con un mapa por id (sin N+1).
+        $aperturas = Apertura::with('user')
+            ->whereIn('id', $cierres->pluck('apertura_id')->filter()->unique())
+            ->get()->keyBy('id');
+
+        // Solo el ÚLTIMO cierre activo se puede eliminar (fiel al legacy: destroy() deniega
+        // cualquier otro para no romper el arrastre de saldos). Se marca para el frontend.
+        $ultimoId = (int) Cierre::where('sucursal_id', $sid)->where('estado', 'ON')->max('id');
+
+        return response()->json(['data' => $cierres->map(function ($c) use ($aperturas, $ultimoId) {
+            $ap = $aperturas->get($c->apertura_id);
+            return [
+                'id'             => $c->id,
+                'apertura_id'    => $c->apertura_id,
+                'fecha_apertura' => $ap?->fecha,
+                'fecha_cierre'   => $c->fecha,
+                'apertura'       => (float) $c->apertura,
+                'ingresos'       => (float) $c->ingresos,
+                'egresos'        => (float) $c->egresos,
+                'efectivo'       => (float) $c->cierre,
+                'usuario'        => $c->user?->name ?? $ap?->user?->name ?? '',
+                'es_ultimo'      => $c->id === $ultimoId,
+            ];
+        })]);
+    }
+
+    /**
+     * Detalle de un cierre (el "ojito" del legacy show()): panel resumen + movimientos del período.
+     * El rango es [apertura.fecha, cierre.fecha]; los montos del resumen son el snapshot del cierre
+     * (consistentes con la Lista de Cierres). Incluye guard de pertenencia de sucursal (IDOR).
+     *
+     * @param  \App\Models\Cierre  $cierre  Resuelto por route-model binding ({cierre}).
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function apiCierreDetalle(Cierre $cierre)
+    {
+        $sid = Auth::user()->sucursal_id;
+        // Un cierre de otra sucursal no se expone (mismo patrón que revertirCierre).
+        if ((int) $cierre->sucursal_id !== (int) $sid) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
+        $cierre->load('user');
+        // La columna `apertura` (monto) tapa la relación apertura(): se busca el modelo por id.
+        $apertura = Apertura::with('user')->find($cierre->apertura_id);
+        $ini = $apertura ? Carbon::parse($apertura->fecha)->toDateString() : Carbon::parse($cierre->fecha)->toDateString();
+        $fin = Carbon::parse($cierre->fecha)->toDateString();
+
+        // `fecha` es DATE → where() plano (no whereDate): mantiene usable `tranzas_fecha_idx`.
+        $movs = Tranza::with('cuenta')->where('sucursal_id', $sid)->where('estado', 'ON')
+            ->where('fecha', '>=', $ini)->where('fecha', '<=', $fin)
+            ->orderBy('id', 'desc')->get();
+
+        $ultimoId = (int) Cierre::where('sucursal_id', $sid)->where('estado', 'ON')->max('id');
+
+        return response()->json([
+            'id'               => $cierre->id,
+            'apertura_id'      => $cierre->apertura_id,
+            'fecha_apertura'   => $apertura?->fecha,
+            'fecha_cierre'     => $cierre->fecha,
+            'apertura'         => (float) $cierre->apertura,
+            'ingresos'         => (float) $cierre->ingresos,
+            'egresos'          => (float) $cierre->egresos,
+            'efectivo'         => (float) $cierre->cierre,
+            'usuario_apertura' => $apertura?->user?->name ?? '',
+            'usuario_cierre'   => $cierre->user?->name ?? '',
+            'es_ultimo'        => $cierre->id === $ultimoId,
+            'movimientos'      => $movs->map(fn($t) => [
+                'id'          => $t->id,
+                'fecha'       => Carbon::parse($t->fecha)->format('d/m/Y'),
+                'clase'       => $t->clase,
+                'cuenta'      => $t->cuenta->nombre ?? '',
+                'descripcion' => $t->descripcion,
+                'ingreso'     => (float) $t->monto_ingreso,
+                'egreso'      => (float) $t->monto_egreso,
+            ]),
+        ]);
+    }
+
+    /**
+     * "Imprimir" un cierre (PDF) — réplica del botón Imprimir del ojito legacy. Reutiliza la vista
+     * `caja.pdf` con el período [apertura.fecha, cierre.fecha]. Guard de pertenencia de sucursal.
+     *
+     * @param  \App\Models\Cierre  $cierre
+     * @return \Illuminate\Http\Response  Stream del PDF.
+     */
+    public function cierrePdf(Cierre $cierre)
+    {
+        $sid = Auth::user()->sucursal_id;
+        if ((int) $cierre->sucursal_id !== (int) $sid) {
+            abort(403, 'No autorizado');
+        }
+
+        // La columna `apertura` (monto) tapa la relación apertura(): se busca el modelo por id.
+        $apertura = Apertura::find($cierre->apertura_id);
+        $desde = $apertura ? Carbon::parse($apertura->fecha)->toDateString() : Carbon::parse($cierre->fecha)->toDateString();
+        $hasta = Carbon::parse($cierre->fecha)->toDateString();
+
+        $movs = Tranza::with('cuenta')->where('sucursal_id', $sid)->where('estado', 'ON')
+            ->where('fecha', '>=', $desde)->where('fecha', '<=', $hasta)
+            ->orderBy('id', 'desc')->get();
+
+        $ingresos = $movs->sum('monto_ingreso');
+        $egresos  = $movs->sum('monto_egreso');
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('caja.pdf', compact('movs', 'ingresos', 'egresos', 'desde', 'hasta'))->setPaper('letter');
+        return $pdf->stream('Cierre_' . $cierre->id . '_' . $hasta . '.pdf');
+    }
+
     public function reportCaja(Request $request)
     {
         $sid = Auth::user()->sucursal_id;
