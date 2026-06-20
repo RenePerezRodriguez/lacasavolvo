@@ -242,9 +242,15 @@ export function EnvioDetail({ envioId, envioData, onNav }) {
   }
 
   async function handleAnular() {
-    if (!window.confirm('¿Anular este envío?')) return;
+    // En PROFORMA no movió stock; ya despachado (ENVIADO/RECIBIDO) el backend revierte el
+    // movimiento de stock al anular, así que se avisa (pedido de QA: anular envíos duplicados).
+    const msg = (e?.estado ?? '') === 'PROFORMA'
+      ? '¿Anular este envío?'
+      : '¿Anular este envío despachado? Se revertirá el movimiento de stock entre sucursales.';
+    if (!window.confirm(msg)) return;
     setSaving(true);
     try { await enviosApi.destroy(envioId); onNav('envios'); }
+    catch (err) { alert(err?.response?.data?.error || 'No se pudo anular el envío.'); }
     finally { setSaving(false); }
   }
 
@@ -267,7 +273,10 @@ export function EnvioDetail({ envioId, envioData, onNav }) {
           <Button variant="ghost" icon="fa-arrow-left" size="sm" onClick={()=>onNav('envios')}>Volver</Button>
           <PdfButton onPdf={() => openPdf(`/envios/${envioId}/pdf`)} />
           {editable && <Button variant="secondary" icon="fa-pen" size="sm" onClick={() => setShowEditEnc(true)}>Editar encabezado</Button>}
-          {estado === 'PROFORMA' && esOrigen && <Button variant="ghost" icon="fa-ban" size="sm" style={{color:"var(--danger)"}} disabled={saving} onClick={handleAnular}>Anular</Button>}
+          {/* Anular: disponible mientras no esté ya ANULADO y seas el ORIGEN (igual que el backend,
+              que revierte el stock al anular un envío despachado). Antes solo salía en PROFORMA →
+              no se podían anular envíos duplicados ya enviados (pedido de QA, como en el legacy). */}
+          {estado !== 'ANULADO' && esOrigen && <Button variant="ghost" icon="fa-ban" size="sm" style={{color:"var(--danger)"}} disabled={saving} onClick={handleAnular}>Anular</Button>}
         </>}
       />
       {showEditEnc && e && (
