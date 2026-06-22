@@ -285,8 +285,12 @@ class CompraController extends Controller
 
     private function recalcularTotales($compra)
     {
+        // Suma los SUBTOTALES guardados (no `costo * cantidad`): el subtotal preserva la
+        // precisión del precio tipeado (legacy: 83.3333×12 = 1000.00), mientras que `costo`
+        // está truncado a 2 decimales en su columna. Espejo de VentaController::recalcular —
+        // sin esto el total de compras daba 999.96 y no reconciliaba con ventas/cotizaciones.
         $monto = $compra->detalles()->where('estado', 'VALIDO')
-            ->selectRaw('COALESCE(SUM(costo * cantidad), 0) as total')
+            ->selectRaw('COALESCE(SUM(subtotal), 0) as total')
             ->value('total');
         $total = max(0, $monto - ($compra->descuento ?? 0));
         $data  = ['monto' => $monto, 'total' => $total];
@@ -347,7 +351,12 @@ class CompraController extends Controller
                 'id'=>$d->id,'producto_id'=>$d->producto_id,
                 'codigo'=>$d->codigo,'descripcion'=>$d->descripcion,
                 'marca'=>$d->marca,'costo'=>(float)$d->costo,
-                'cantidad'=>$d->cantidad,'subtotal'=>'Bs. '.number_format($d->costo * $d->cantidad,2),
+                'cantidad'=>$d->cantidad,
+                // Subtotal GUARDADO (NO costo*cantidad recalculado): preserva la precisión del
+                // precio tipeado para que el total cuadre, igual que VentaController::apiDetalles.
+                // `subtotal_num` para que el front sume sin reparsear el string formateado.
+                'subtotal'=>'Bs. '.number_format($d->subtotal,2),
+                'subtotal_num'=>(float)$d->subtotal,
             ])
         );
     }

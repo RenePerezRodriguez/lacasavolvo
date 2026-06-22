@@ -70,7 +70,7 @@
                 <td>{{ $d->marca }}</td>
                 <td style="text-align:center">{{ $d->cantidad }}</td>
                 <td>{{ number_format($d->costo, 2) }}</td>
-                <td class="text-right" style="font-weight:bold">{{ number_format($d->costo * $d->cantidad, 2) }}</td>
+                <td class="text-right" style="font-weight:bold">{{ number_format($d->subtotal, 2) }}</td>
             </tr>
             @endforeach
         </tbody>

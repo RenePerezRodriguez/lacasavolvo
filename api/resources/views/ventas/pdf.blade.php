@@ -9,6 +9,6 @@ td{padding:8px 10px;border-bottom:1px solid #F1F5F9;font-size:12px}.text-right{t
 <h2>{{ $venta->cuenta->nombre ?? '—' }} · {{ $venta->fecha->format('d/m/Y') }}</h2>
 <div class="info"><div><strong>Cliente</strong>{{ $venta->cuenta->nombre ?? '—' }}</div><div><strong>Tipo</strong>{{ $venta->tipo }}</div><div><strong>Pago</strong>{{ $venta->estado === 'VALIDO' ? $venta->pagado : '—' }}</div><div><strong>Estado</strong>{{ $venta->estado }}</div></div>
 <table><thead><tr><th>Código</th><th>Descripción</th><th>Marca</th><th class="text-right">Cant.</th><th class="text-right">Precio</th><th class="text-right">Subtotal</th></tr></thead>
-<tbody>@foreach($detalles as $d)<tr><td>{{ $d->codigo }}</td><td>{{ $d->descripcion }}</td><td>{{ $d->marca }}</td><td class="text-right">{{ $d->cantidad }}</td><td class="text-right">Bs. {{ number_format($d->costo,2) }}</td><td class="text-right">Bs. {{ number_format($d->costo * $d->cantidad,2) }}</td></tr>@endforeach</tbody></table>
+<tbody>@foreach($detalles as $d)<tr><td>{{ $d->codigo }}</td><td>{{ $d->descripcion }}</td><td>{{ $d->marca }}</td><td class="text-right">{{ $d->cantidad }}</td><td class="text-right">Bs. {{ number_format($d->costo,2) }}</td><td class="text-right">Bs. {{ number_format($d->subtotal,2) }}</td></tr>@endforeach</tbody></table>
 <p class="total">TOTAL: Bs. {{ number_format($venta->total,2) }}</p>
 </body></html>
