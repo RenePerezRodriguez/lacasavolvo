@@ -3,9 +3,9 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useListData, useColumnVisibility } from '../lib/hooks.js';
+import { useListData, useColumnVisibility, filterDetalles } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
-import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader } from '../lib/components.jsx';
+import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader, RowFilterInput } from '../lib/components.jsx';
 import { CotizacionFormModal, EncabezadoModal } from './forms.jsx';
 import { openPdf, cotizaciones as cotizApi } from '../services/api.js';
 
@@ -183,6 +183,9 @@ export function Cotizaciones({ onNav, sucursalId, user, effectivePermissions }) 
  */
 export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
   const [detalles, setDetalles]     = useState([]);
+  // Filtro SOLO-visual de los renglones ya agregados (no toca el total, que suma `detalles`).
+  const [filtroItems, setFiltroItems] = useState('');
+  const itemsVisibles = filterDetalles(detalles, filtroItems);
   const [loading, setLoading]       = useState(true);
   const [saving, setSaving]         = useState(false);
   const [converting, setConverting] = useState(false);
@@ -357,8 +360,10 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
                 <Badge tone="neutral">{detalles.length}</Badge>
                 {saving && <Icon name="fa-spinner fa-spin" style={{fontSize:12,color:"var(--soft)"}}/>}
               </div>
+              {detalles.length > 0 && <RowFilterInput value={filtroItems} onChange={setFiltroItems} count={itemsVisibles.length} total={detalles.length}/>}
             </div>
-            {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-file-invoice"/> : (
+            {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-file-invoice"/>
+              : itemsVisibles.length === 0 ? <Empty text="Sin coincidencias en los productos agregados" icon="fa-filter"/> : (
               <table className="tbl">
                 <thead><tr>
                   <th>Producto</th>
@@ -368,7 +373,7 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
                   {editable && <th style={{width:40}}></th>}
                 </tr></thead>
                 <tbody>
-                  {detalles.map(it => (
+                  {itemsVisibles.map(it => (
                     <tr key={it.id}>
                       <td>
                         <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{it.descripcion}</div>

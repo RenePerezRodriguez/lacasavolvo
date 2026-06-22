@@ -75,3 +75,26 @@ export function useListData(apiList, apiKpis, getParams, deps) {
 
   return { items, total, kpis, loading, reload: run };
 }
+
+/**
+ * Filtra (SOLO para visualización) los renglones YA AGREGADOS a un documento por código,
+ * descripción, marca o ID. El '#' inicial se ignora ("#635" == "635"); query vacía → todos.
+ * Generaliza el `devFiltrados` de VentaDetail. Distinto del buscador de AGREGAR producto.
+ *
+ * ⚠️ NO altera totales: el documento SIEMPRE debe sumar sobre la lista COMPLETA de `detalles`,
+ * nunca sobre el resultado de este filtro (que es solo para mostrar/encontrar un renglón).
+ *
+ * @param {Array<object>} detalles - Renglones del documento (codigo/descripcion/marca/producto_id|id).
+ * @param {string} query - Texto de filtro.
+ * @returns {Array<object>} Subconjunto de `detalles` que coincide (mismas referencias).
+ */
+export function filterDetalles(detalles, query) {
+  const ql = (query || '').trim().toLowerCase().replace(/^#/, '');
+  if (!ql) return detalles;
+  return (detalles || []).filter(d =>
+    (d.codigo || '').toLowerCase().includes(ql) ||
+    (d.descripcion || '').toLowerCase().includes(ql) ||
+    (d.marca || '').toLowerCase().includes(ql) ||
+    String(d.producto_id ?? d.id) === ql
+  );
+}

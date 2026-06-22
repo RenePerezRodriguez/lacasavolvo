@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Icon, Button, Badge, Card, Empty, PageHead, ProductSearchInput, AccountSearchInput, QtyStepper } from '../../lib/components.jsx';
+import { Icon, Button, Badge, Card, Empty, PageHead, ProductSearchInput, AccountSearchInput, QtyStepper, RowFilterInput } from '../../lib/components.jsx';
+import { filterDetalles } from '../../lib/hooks.js';
 import { ventas as ventasApi } from '../../services/api.js';
 
 /**
@@ -28,6 +29,8 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
   const [error, setError]             = useState(null);
   const [highlightCliente, setHighlightCliente] = useState(false);
   const clienteCardRef = useRef(null);
+  // Filtro SOLO-visual de los renglones ya agregados (no toca el total, que suma `detalles`).
+  const [filtroItems, setFiltroItems] = useState('');
 
 
   async function reloadDetalles(vid) {
@@ -187,6 +190,8 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
   // Total = suma de los SUBTOTALES guardados (preservan la precisión del precio tipeado,
   // p. ej. 83.3333×12 = 1000.00), no `costo × cantidad` sobre el costo truncado a 2 decimales.
   const total = detalles.reduce((s, d) => s + (d.subtotal_num != null ? parseFloat(d.subtotal_num) : parseFloat(d.costo) * d.cantidad), 0);
+  // Renglones visibles tras el filtro (SOLO para mostrar; el `total` de arriba usa `detalles` completo).
+  const itemsVisibles = filterDetalles(detalles, filtroItems);
 
   return (
     <div className="fade-up stack" style={{"--gap":"20px"}}>
@@ -260,15 +265,18 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
           </div>
 
           <Card pad={false}>
-            <div className="row" style={{padding:"12px 16px", borderBottom:"1px solid var(--line)", justifyContent:"space-between"}}>
+            <div className="row" style={{padding:"12px 16px", borderBottom:"1px solid var(--line)", justifyContent:"space-between", flexWrap:"wrap", gap:8}}>
               <div className="row" style={{gap:12}}>
                 <span style={{fontSize:13, fontWeight:700, color:"var(--ink)"}}>Productos</span>
                 <Badge tone="neutral">{detalles.length} {detalles.length === 1 ? "ítem" : "ítems"}</Badge>
                 {(saving || creando) && <Icon name="fa-spinner fa-spin" style={{fontSize:12, color:"var(--soft)"}}/>}
               </div>
+              {detalles.length > 0 && <RowFilterInput value={filtroItems} onChange={setFiltroItems} count={itemsVisibles.length} total={detalles.length}/>}
             </div>
             {detalles.length === 0
               ? <Empty text="Aún no agregaste productos" icon="fa-barcode"/>
+              : itemsVisibles.length === 0
+              ? <Empty text="Sin coincidencias en los productos agregados" icon="fa-filter"/>
               : (
               <table className="tbl">
                 <thead>
@@ -281,7 +289,7 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
                   </tr>
                 </thead>
                 <tbody>
-                  {detalles.map(it => (
+                  {itemsVisibles.map(it => (
                     <tr key={it.id}>
                       <td>
                         <div style={{fontSize:13, fontWeight:600, color:"var(--ink)"}}>{it.descripcion}</div>

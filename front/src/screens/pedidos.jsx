@@ -3,9 +3,9 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useListData, useColumnVisibility } from '../lib/hooks.js';
+import { useListData, useColumnVisibility, filterDetalles } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
-import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, CopyableCode, DocHeader } from '../lib/components.jsx';
+import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, CopyableCode, DocHeader, RowFilterInput } from '../lib/components.jsx';
 import { PedidoFormModal } from './forms.jsx';
 import { openPdf, pedidos as pedidosApi } from '../services/api.js';
 
@@ -152,6 +152,9 @@ export function Pedidos({ onNav, sucursalId, effectivePermissions }) {
  */
 export function PedidoDetail({ pedidoId, pedidoData, onNav }) {
   const [detalles, setDetalles] = useState([]);
+  // Filtro SOLO-visual de los renglones ya agregados (no toca cantidades ni el documento).
+  const [filtroItems, setFiltroItems] = useState('');
+  const itemsVisibles = filterDetalles(detalles, filtroItems);
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [p, setP]               = useState(pedidoData ?? null);
@@ -254,14 +257,16 @@ export function PedidoDetail({ pedidoId, pedidoData, onNav }) {
             </div>
           )}
           <Card pad={false}>
-            <div className="row" style={{padding:"12px 16px",borderBottom:"1px solid var(--line)",justifyContent:"space-between"}}>
+            <div className="row" style={{padding:"12px 16px",borderBottom:"1px solid var(--line)",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
               <div className="row" style={{gap:12}}>
                 <span style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>Productos del pedido</span>
                 <Badge tone="neutral">{detalles.length}</Badge>
                 {saving && <Icon name="fa-spinner fa-spin" style={{fontSize:12,color:"var(--soft)"}}/>}
               </div>
+              {detalles.length > 0 && <RowFilterInput value={filtroItems} onChange={setFiltroItems} count={itemsVisibles.length} total={detalles.length}/>}
             </div>
-            {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-clipboard-list"/> : (
+            {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-clipboard-list"/>
+              : itemsVisibles.length === 0 ? <Empty text="Sin coincidencias en los productos agregados" icon="fa-filter"/> : (
               // Detalle desglosado en columnas (ID · Código · Descripción · Marca) como en
               // Productos — observación de QA: antes iba todo amontonado en una sola celda y
               // el "ID" mostrado era el de la línea, no el del producto. El código es copiable.
@@ -275,7 +280,7 @@ export function PedidoDetail({ pedidoId, pedidoData, onNav }) {
                   {estado === 'PROFORMA' && <th style={{width:40}}></th>}
                 </tr></thead>
                 <tbody>
-                  {detalles.map(it => (
+                  {itemsVisibles.map(it => (
                     <tr key={it.id}>
                       <td><span className="mono" style={{fontSize:11,fontWeight:600,color:"var(--soft)"}}>#{it.producto_id ?? it.id}</span></td>
                       <td><CopyableCode code={it.codigo} codeStyle={{fontSize:11,fontWeight:700,color:"var(--accent)"}}/></td>

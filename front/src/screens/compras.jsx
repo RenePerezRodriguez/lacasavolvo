@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useListData, useColumnVisibility } from '../lib/hooks.js';
+import { useListData, useColumnVisibility, filterDetalles } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
-import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader } from '../lib/components.jsx';
+import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader, RowFilterInput } from '../lib/components.jsx';
 import { CompraFormModal, EncabezadoModal } from './forms.jsx';
 import { openPdf, compras as comprasApi } from '../services/api.js';
 
@@ -186,6 +186,8 @@ export function CompraDetail({ compraId, compraData, onNav }) {
   const [showDev, setShowDev]       = useState(false);
   const [devProdId, setDevProdId]   = useState('');
   const [devCant, setDevCant]       = useState(1);
+  // Filtro SOLO-visual de los renglones ya agregados (no toca el total, que suma `detalles`).
+  const [filtroItems, setFiltroItems] = useState('');
 
   // Edición de encabezado: botón en la cabecera → modal compartido (EncabezadoModal),
   // igual que Cotizaciones/Envíos (DRY, ya no inline en el "Resumen"). `editTipo`
@@ -287,7 +289,11 @@ export function CompraDetail({ compraId, compraData, onNav }) {
   }
 
   const estado    = c?.estado ?? '—';
-  const totalNum  = detalles.reduce((s, d) => s + parseFloat(d.costo) * d.cantidad, 0);
+  // Renglones visibles tras el filtro (SOLO visual; `totalNum` de abajo usa `detalles` completo).
+  const itemsVisibles = filterDetalles(detalles, filtroItems);
+  // Suma el subtotal GUARDADO (subtotal_num) — NO costo×cantidad, que con precios de >2
+  // decimales no cuadra (83.33×12=999.96 ≠ 1000.00). Fallback a costo×cantidad por compat.
+  const totalNum  = detalles.reduce((s, d) => s + (d.subtotal_num != null ? parseFloat(d.subtotal_num) : parseFloat(d.costo) * d.cantidad), 0);
   // monto_num viene del backend como float; el string "Bs. 1,234.56" no es parseable con parseFloat
   const pagadoNum = pagos.reduce((s, p) => s + (p.monto_num ?? 0), 0);
   const saldoNum  = c?.saldo !== undefined && c?.saldo !== null ? parseFloat(c.saldo) : Math.max(0, totalNum - pagadoNum);
@@ -358,14 +364,16 @@ export function CompraDetail({ compraId, compraData, onNav }) {
             </div>
           )}
           <Card pad={false}>
-            <div className="row" style={{padding:"12px 16px",borderBottom:"1px solid var(--line)",justifyContent:"space-between"}}>
+            <div className="row" style={{padding:"12px 16px",borderBottom:"1px solid var(--line)",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
               <div className="row" style={{gap:12}}>
                 <span style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>Ítems de compra</span>
                 <Badge tone="neutral">{detalles.length}</Badge>
                 {saving && <Icon name="fa-spinner fa-spin" style={{fontSize:12,color:"var(--soft)"}}/>}
               </div>
+              {detalles.length > 0 && <RowFilterInput value={filtroItems} onChange={setFiltroItems} count={itemsVisibles.length} total={detalles.length}/>}
             </div>
-            {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-cubes"/> : (
+            {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-cubes"/>
+              : itemsVisibles.length === 0 ? <Empty text="Sin coincidencias en los productos agregados" icon="fa-filter"/> : (
               <table className="tbl">
                 <thead><tr>
                   <th>Producto</th>
@@ -375,7 +383,7 @@ export function CompraDetail({ compraId, compraData, onNav }) {
                   {estado === 'PROFORMA' && <th style={{width:40}}></th>}
                 </tr></thead>
                 <tbody>
-                  {detalles.map(it => (
+                  {itemsVisibles.map(it => (
                     <tr key={it.id}>
                       <td>
                         <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{it.descripcion}</div>
@@ -391,7 +399,7 @@ export function CompraDetail({ compraId, compraData, onNav }) {
                       </td>
                       <td className="right mono tabular" style={{fontSize:13}}>
                         {estado === 'PROFORMA' ? (
-                          <input className="input mono" type="number" min="0" step="0.01"
+                          <input className="input mono" type="number" min="0" step="any"
                             defaultValue={parseFloat(it.costo)}
                             onBlur={e => updateCosto(it, e.target.value)}
                             style={{width:100,textAlign:"right",padding:"3px 6px",fontSize:12}}/>

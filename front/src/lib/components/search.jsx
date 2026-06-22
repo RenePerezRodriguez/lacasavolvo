@@ -531,3 +531,41 @@ export function ComboSelect({ options = [], value, onChange, placeholder = 'Busc
     </div>
   );
 }
+
+
+/**
+ * Filtro client-side sobre los renglones YA AGREGADOS a un documento (pedido/venta/cotización/
+ * compra/envío) — replica el buscador del legacy sobre la tabla del documento. Es SOLO de
+ * visualización: el filtro NUNCA altera los totales (que siempre suman la lista completa).
+ * Distinto del ProductSearchInput, que AGREGA productos nuevos. Combinar con `filterDetalles`.
+ *
+ * @param {object} props
+ * @param {string} props.value - Texto actual del filtro (controlado por el padre).
+ * @param {function(string): void} props.onChange - Callback con el nuevo texto.
+ * @param {string} [props.placeholder] - Placeholder del input.
+ * @param {number} [props.count] - Renglones que coinciden (se muestra "count/total" al filtrar).
+ * @param {number} [props.total] - Total de renglones.
+ * @returns {JSX.Element}
+ */
+export function RowFilterInput({ value, onChange, placeholder = 'Filtrar productos agregados…', count, total }) {
+  return (
+    <div className="input-group" style={{ position: 'relative', maxWidth: 320, minWidth: 180 }}>
+      <span className="lead-icon"><Icon name="fa-magnifying-glass" style={{ fontSize: 12 }} /></span>
+      <input
+        className="input"
+        placeholder={placeholder}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={{ fontSize: 12, paddingRight: value ? 64 : 12 }}
+        aria-label={placeholder}
+      />
+      {value && (
+        <button type="button" onClick={() => onChange('')} title="Limpiar filtro"
+          style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 0, cursor: 'pointer', color: 'var(--soft)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 5 }}>
+          {typeof count === 'number' && typeof total === 'number' && <span className="mono" style={{ fontWeight: 700 }}>{count}/{total}</span>}
+          <Icon name="fa-times" style={{ fontSize: 11 }} />
+        </button>
+      )}
+    </div>
+  );
+}

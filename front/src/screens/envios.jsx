@@ -3,9 +3,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useListData, useColumnVisibility } from '../lib/hooks.js';
+import { useListData, useColumnVisibility, filterDetalles } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
-import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader } from '../lib/components.jsx';
+import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader, RowFilterInput } from '../lib/components.jsx';
 import { EnvioFormModal, EnvioEncabezadoModal } from './forms.jsx';
 import { openPdf, envios as enviosApi } from '../services/api.js';
 
@@ -160,6 +160,9 @@ export function Envios({ onNav, sucursalId, effectivePermissions }) {
  */
 export function EnvioDetail({ envioId, envioData, onNav }) {
   const [detalles, setDetalles]     = useState([]);
+  // Filtro SOLO-visual de los renglones ya agregados (no toca cantidades ni el documento).
+  const [filtroItems, setFiltroItems] = useState('');
+  const itemsVisibles = filterDetalles(detalles, filtroItems);
   const [devs, setDevs]             = useState([]);
   const [loading, setLoading]       = useState(true);
   const [saving, setSaving]         = useState(false);
@@ -337,8 +340,10 @@ export function EnvioDetail({ envioId, envioData, onNav }) {
                 <Badge tone="neutral">{detalles.length}</Badge>
                 {saving && <Icon name="fa-spinner fa-spin" style={{fontSize:12,color:"var(--soft)"}}/>}
               </div>
+              {detalles.length > 0 && <RowFilterInput value={filtroItems} onChange={setFiltroItems} count={itemsVisibles.length} total={detalles.length}/>}
             </div>
-            {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-truck"/> : (
+            {detalles.length === 0 ? <Empty text="Sin productos" icon="fa-truck"/>
+              : itemsVisibles.length === 0 ? <Empty text="Sin coincidencias en los productos agregados" icon="fa-filter"/> : (
               <table className="tbl">
                 <thead><tr>
                   <th>Producto</th>
@@ -346,7 +351,7 @@ export function EnvioDetail({ envioId, envioData, onNav }) {
                   {(editable || (estado === 'RECIBIDO' && esDestino)) && <th style={{width: estado==='RECIBIDO'?180:40}}></th>}
                 </tr></thead>
                 <tbody>
-                  {detalles.map(it => (
+                  {itemsVisibles.map(it => (
                     <tr key={it.id}>
                       <td>
                         <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{it.descripcion}</div>
