@@ -176,8 +176,8 @@ h3 { font-size: 16px; font-weight: 700; }
      SUC_COLORS) para que el cambio de sucursal sea evidente de un vistazo (pedido de QA — la
      dueña maneja varias ventanas). Gradiente más marcado que el 6% previo, sin perder el navy. */
   background: linear-gradient(180deg,
-    color-mix(in srgb, var(--accent) 20%, var(--sb-bg)) 0%,
-    color-mix(in srgb, var(--accent) 12%, var(--sb-bg)) 100%);
+    color-mix(in srgb, var(--accent) 40%, var(--sb-bg)) 0%,
+    color-mix(in srgb, var(--accent) 22%, var(--sb-bg)) 100%);
   color: var(--sb-text);
   display: flex;
   flex-direction: column;
@@ -189,7 +189,7 @@ h3 { font-size: 16px; font-weight: 700; }
 }
 .sidebar.light-mode {
   /* En claro el tinte por sucursal es más suave (sobre blanco) para no saturar. */
-  background: color-mix(in srgb, var(--accent) 11%, #ffffff);
+  background: color-mix(in srgb, var(--accent) 18%, #ffffff);
   --sb-bg:        #ffffff;
   --sb-bg-2:      #fafbfd;
   --sb-text:      var(--body);
@@ -206,7 +206,10 @@ h3 { font-size: 16px; font-weight: 700; }
   align-items: center;
   gap: 10px;
   padding: 14px 14px;
-  border-bottom: 1px solid var(--sb-line);
+  /* Borde inferior con el color de la sucursal activa (--accent): señal sólida e inequívoca
+     del cambio de sucursal, además del tinte del gradiente (pedido de QA — "aún no hay
+     diferencia clara"). */
+  border-bottom: 3px solid var(--accent);
   flex-shrink: 0;
 }
 .sidebar-brand .logo {
