@@ -2,8 +2,10 @@
 # Uso: .\start.ps1
 
 $php = "C:\Users\Rene_\.config\herd\bin\php83\php.exe"
-$apiRoot = "D:\Sitios Web\lacasavolvo\api"
-$frontRoot = "D:\Sitios Web\lacasavolvo\front"
+# Rutas relativas al propio script (ubicación-independiente): el repo se mudó
+# de D:\Sitios Web\lacasavolvo a D:\softlat-clientes\la-casa-volvo\sistema-erp.
+$apiRoot = Join-Path $PSScriptRoot "api"
+$frontRoot = Join-Path $PSScriptRoot "front"
 
 Write-Host "=== La Casa Volvo — Local Dev ===" -ForegroundColor Cyan
 

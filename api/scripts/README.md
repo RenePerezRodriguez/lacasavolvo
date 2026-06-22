@@ -1,139 +1,60 @@
 # 🚀 Deploy a Producción — La Casa Volvo API
 
-**Stack:** Laravel 13 · PHP 8.3 · MySQL · cPanel sin SSH  
-**URL producción:** `https://api.lacasavolvo.com`  
-**Subdominio:** `api.lacasavolvo.com` → DocumentRoot: `public/`
+**Stack:** Laravel 13 · PHP 8.3 · MySQL · cPanel **sin SSH**
+**URL producción:** `https://api.lacasavolvo.com` (DocumentRoot del subdominio: `public/`)
+
+> ⚠️ **Producción EN VIVO (sistema de dinero): no desplegar sin OK explícito.**
+> Runbook canónico con credenciales y detalle fino: **`docs/DEPLOY.md`** (gitignored).
 
 ---
 
-## 📁 Estructura de scripts
+## 📁 Scripts (`api/scripts/deploy/`)
 
 ```text
-api/scripts/
-├── README.md               ← Este archivo
-└── deploy/
-    ├── upload-ftp.ps1       ← PowerShell: subir todo el proyecto por FTP
-    ├── setup.php            ← PHP: setup post-deploy (migrate + storage:link + cachés)
-    └── create-users.php     ← PHP: crear usuarios admin/vendedor iniciales
+deploy/
+├── deploy-cpanel-api.sh     ← Orquestador del deploy por la API de cPanel (UAPI). Método ACTUAL.
+├── setup.php                ← Setup post-deploy (migrate + storage:link + limpia cachés), se auto-elimina.
+├── create-users.php         ← Crea usuarios iniciales (solo en BD nueva/vacía).
+├── create-admin-legacy.php  ← Crea/garantiza el admin en la BD legacy.
+├── .deploy.env              ← Credenciales (gitignored, NUNCA se commitea).
+└── .deploy.env.example      ← Plantilla de credenciales.
 ```
+
+> El método viejo por **FTP (`upload-ftp.ps1`) fue eliminado** (commit `7da0fa8`). Todo va por UAPI.
 
 ---
 
-## 🔄 Flujo de deploy (paso a paso)
+## 🔄 Deploy (forma rápida)
 
-### 1. Preparar `.env` de producción
+Desde la raíz del repo, en **Git Bash**:
 
-Crear `api/.env.production.server` con las credenciales del servidor:
-
-```env
-APP_NAME="La Casa Volvo"
-APP_ENV=production
-APP_DEBUG=false
-APP_URL=https://api.lacasavolvo.com
-
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_DATABASE=lacasavo_staging
-DB_USERNAME=userjavi
-DB_PASSWORD=********
-
-CORS_ALLOWED_ORIGINS=https://lacasavolvo.com,https://staging.lacasavolvo.com
+```bash
+bash api/scripts/deploy/deploy-cpanel-api.sh --api <archivos relativos a api/> --spa
+# ej: --api app/Http/Controllers/CajaController.php routes/api.php --spa
 ```
 
-> ⚠️ Este archivo está en `.gitignore`. El script FTP lo renombra a `.env` al subir.
+Hace todo: sube los `.php` por UAPI, limpia cachés (route/config/view + opcache), build del SPA + sube `front/dist`, y corre un smoke test.
 
-### 2. Subir archivos al servidor (PowerShell)
-
-```powershell
-cd "d:\Sitios Web\lacasavolvo\api"
-powershell -ExecutionPolicy Bypass -File scripts/deploy/upload-ftp.ps1
-```
-
-**Qué sube:**
-
-- Archivos raíz: `artisan`, `composer.json`, `composer.lock`
-- `.env.production.server` → `.env` en el servidor
-- Carpetas: `app/`, `bootstrap/`, `config/`, `database/`, `lang/`, `public/`, `resources/`, `routes/`, `scripts/`, `storage/`, `vendor/`
-
-**Tiempo estimado:** ~15 minutos (vendor/ son ~5000 archivos).  
-**Tip:** Si vendor/ no cambió, comentá `"vendor"` en `$folders` para ahorrar tiempo.
-
-### 3. Configurar PHP en el servidor
-
-En cPanel → Select PHP Version → Options:
-
-- `max_execution_time = 300`
-- `memory_limit = 512M`
-
-O crear `.user.ini` en la raíz del subdominio:
-
-```ini
-max_execution_time=300
-memory_limit=512M
-```
-
-### 4. Ejecutar setup
-
-1. Copiá `scripts/deploy/setup.php` a la carpeta `public/` del servidor
-2. Abrilo: **`https://api.lacasavolvo.com/setup.php`**
-3. El script ejecuta:
-   - ✅ `migrate --force` → 8 migraciones (cache, jobs, RBAC Spatie, Sanctum, índices, DECIMAL, email, simulated_role_id)
-   - ✅ `migrate --force` → 8 migraciones (la #3 adapta roles/permisos)
-   - ✅ `storage:link --force` → acceso público a PDFs desde storage/
-   - ✅ Limpieza de cachés
-4. Crear usuarios iniciales:
-   ```bash
-   php scripts/deploy/create-users.php
-   - ✅ `config:clear`, `cache:clear`, `view:clear`, `route:clear`
-4. Si todo OK → el script se auto-elimina ✅
-5. Si hay error → muestra el error, corregí y recargá
-
-### 5. Verificar API
-
-```powershell
-# Login
-Invoke-RestMethod -Uri "https://api.lacasavolvo.com/api/login" `
-  -Method Post -Body '{"email":"admin@lcv.bo","password":"..."}' `
-  -ContentType "application/json"
-```
-
-Respuesta esperada: `{ "token": "1|...", "user": { ... } }`
-
----
-
-## 📋 Migraciones (8 total)
-
-| # | Migración | Descripción |
-| --- | --- | --- |
-| 1 | `0001_01_01_000001` | Tablas cache y cache_locks |
-| 2 | `0001_01_01_000002` | Tablas jobs y failed_jobs |
-| 3 | `2026_05_13_201655` | Adapta Shinobi→Spatie: guard_name, pivots, migra role_user |
-| 4 | `2026_05_16_000001` | Índices de rendimiento |
-| 5 | `2026_05_20_232900` | Sanctum: personal_access_tokens |
-| 6 | `2026_05_26_000000` | Columna `email` en cuentas |
-| 7 | `2026_05_26_000001` | DECIMAL(9,2)→(12,2) en cierres/aperturas |
-| 8 | `2026_05_26_075338` | `simulated_role_id` en users (simulador de roles) |
+### Requisitos / gotchas
+- Credenciales en `api/scripts/deploy/.deploy.env` (copiá de `.deploy.env.example` y completá `CPANEL_USER` + `CPANEL_API_TOKEN`).
+- En Git Bash el script ya exporta `MSYS_NO_PATHCONV=1` (si no, las rutas `/home/...` se mutan a rutas Windows).
+- El zip del SPA se hace con **python `zipfile`** (separador `/`), **NUNCA** `Compress-Archive` (mete `\` y rompe el SPA en Linux).
+- Tras tocar la API, el **clear-cache es obligatorio** o las rutas nuevas dan 404 (el script ya lo hace).
+- Scripts PHP temporales siempre con `?key=<secreto>` + autoeliminación.
 
 ---
 
 ## 🗄️ Base de datos
-
-- **Nombre BD:** `lacasavo_staging` (producción) / `tienda` (local)
-- **Dump de referencia:** `api/tienda (1).sql` (71 MB, ~15 MB comprimido)
-- **Importar dump grande sin SSH:**
-  1. Comprimir: `Compress-Archive -Path "tienda (1).sql" -DestinationPath import.zip`
-  2. Subir `import.zip` por FTP a `public/`
-  3. Extraer con File Manager de cPanel
-  4. Importar con phpMyAdmin (si es muy grande, partirlo o pedir soporte)
+- **Prod:** `lacasavo_prod` (copia de `tienda`; `tienda` queda intacta como red de seguridad/rollback). **Local/dev:** `tienda`. **Tests:** `tienda_test`.
+- Tablas de negocio heredadas del legacy (2017); migraciones con guard `Schema::hasTable`/`hasColumn`/`hasIndex`.
+- **No se corre `db:seed` en prod:** los permisos son los del legacy (ver `.claude/CLAUDE.md` → Roles).
 
 ---
 
-## 🔑 Permisos y roles
-
-- **91 permisos granulares** (igual al legacy Shinobi)
-- **8 roles:** ADMIN · GERENTE · VENDEDOR · CAJERO · OPERADOR · SUSPENDIDO · VENDEDOR DENNIS · VTARIJA
-- ADMIN tiene `Gate::before` → acceso total sin permisos explícitos
-- Los permisos se asignan en `PermissionsSeeder` vía `syncPermissions()`
+## 🔑 Roles
+- **7 roles en la BD legacy:** ADMIN · GERENTE · VENDEDOR · OPERADOR · SUSPENDIDO · VENDEDOR DENNIS · VTARIJA.
+- **CAJERO no existe en la BD legacy** (solo lo crea `PermissionsSeeder` para `tienda_test`).
+- ADMIN tiene `Gate::before` → acceso total sin permisos explícitos.
 
 ---
 
@@ -141,21 +62,16 @@ Respuesta esperada: `{ "token": "1|...", "user": { ... } }`
 
 | Problema | Causa | Solución |
 | --- | --- | --- |
-| 500 en setup | `max_execution_time=30` no alcanza | Subir `.user.ini` o cambiar en cPanel |
-| 404 en `/api/*` | `.htaccess` de Laravel no funciona | Revisar que `public/.htaccess` existe y mod_rewrite activo |
-| "Nothing to migrate" | Migraciones ya corrieron | Normal, es idempotente |
-| "Role already exists" | Seeder ya corrió | Normal, usa `firstOrCreate` |
-| BD vacía, migración falla | `ALTER TABLE roles` sin tabla | Importar dump legacy primero |
+| 404 en ruta nueva tras deploy | Falta limpiar cachés | Re-correr clear-cache (el script ya lo hace) |
+| 500 en setup | `max_execution_time=30` corto | Subir `.user.ini` (`max_execution_time=300`, `memory_limit=512M`) |
+| Smoke `HTTP 000` | API fría tras clear-cache (timeout transitorio) | Reintentar con timeout mayor |
+| SPA con assets rotos en Linux | Se zipeó con `Compress-Archive` | Re-zipear con python `zipfile` |
 
 ---
 
 ## 📦 Frontend (SPA)
-
-El frontend React se sirve desde `lacasavolvo.com` y `staging.lacasavolvo.com`, NO desde la API.
-
-Ver `front/.env.production` y `front/.env.staging` para `VITE_API_URL`.
+Se sirve desde `lacasavolvo.com` (prod) y `staging.lacasavolvo.com`, NO desde la API. Ver `front/.env.production` / `front/.env.staging` para `VITE_API_URL`.
 
 ---
 
-**Última actualización:** 26 de mayo de 2026  
-**Autor:** Rene Arturo Perez Rodriguez
+**Método actual:** UAPI de cPanel. Runbook fino: `docs/DEPLOY.md`.

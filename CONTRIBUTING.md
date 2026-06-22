@@ -1,15 +1,15 @@
 # Guía de contribución
 
-Repositorio **privado** del sistema de La Casa Volvo. Esta guía es para el equipo de desarrollo
-autorizado.
+Repositorio del sistema de La Casa Volvo (se hará público — cuidar de NUNCA commitear secretos).
+Esta guía es para el equipo de desarrollo.
 
 ## Flujo de trabajo
 
-1. Ramá desde `master`: `git checkout -b feat/mi-cambio` (o `fix/…`, `perf/…`, `chore/…`).
+1. Ramá desde `dev`: `git checkout -b feat/mi-cambio` (o `fix/…`, `perf/…`, `chore/…`).
 2. Hacé commits **atómicos** con mensajes en formato [Conventional Commits](https://www.conventionalcommits.org/):
    `feat(ventas): …`, `fix(caja): …`, `perf(estadisticas): …`, `docs: …`.
 3. Antes de abrir PR, todo en verde (ver más abajo). No se mergea con la suite roja.
-4. PR a `master` con descripción del cambio. No mergees a producción sin revisión.
+4. PR a `dev` (rama de integración) con descripción del cambio. `main` es **solo releases** (nunca commit directo). No mergees a producción sin revisión.
 
 ## Antes de commitear — todo en verde
 

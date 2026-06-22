@@ -38,12 +38,20 @@ api/phpunit.xml
 api/public/diagnose*.php
 api/public/import.zip
 
-# ── Documentación con credenciales ─────────────────────────────────
+# ── Documentación con credenciales / interna (NO va al repo público) ──
 docs/DEPLOY.md
+docs/CUTOVER.md
+docs/AUDIT-LEDGER.md
+docs/AUDIT-MATRIX.md
+.claude/CLAUDE.md
 
 # ── Credenciales de deploy (NO commitear, como DEPLOY.md) ─
 api/scripts/deploy/.deploy.env
 api/scripts/deploy/upload-ftp-clean.ps1
+
+# ── Backup local del sistema LEGACY (código viejo + dump de la base `tienda`
+#    con datos reales) — NUNCA subir al repo (es público). Candado preventivo. ─
+legacy/
 
 # ── Scratch / salidas temporales (datos sensibles: chats, dumps de QA) ─
 .scratch/

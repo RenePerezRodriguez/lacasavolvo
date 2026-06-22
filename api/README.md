@@ -18,7 +18,8 @@ Ese script levanta backend (`:8000`) + frontend (`:3000`) y libera los puertos s
 ### Solo backend
 
 ```powershell
-C:\Users\Rene_\.config\herd\bin\php83\php.exe -S 127.0.0.1:8000 -t "D:\Sitios Web\lacasavolvo\api\public" "D:\Sitios Web\lacasavolvo\api\router.php"
+# Desde api/ (en esta máquina usá la ruta exacta del php83 que está en ../start.ps1)
+php -S 127.0.0.1:8000 -t public router.php
 ```
 
 - URL: **`http://localhost:8000`**
@@ -27,8 +28,8 @@ C:\Users\Rene_\.config\herd\bin\php83\php.exe -S 127.0.0.1:8000 -t "D:\Sitios We
 ### Migraciones
 
 ```bash
-cd "D:\Sitios Web\lacasavolvo\api"
-C:\Users\Rene_\.config\herd\bin\php83\php.exe artisan migrate
+cd api
+php artisan migrate
 ```
 
 > No se usa `db:seed`. Roles y permisos vienen del legacy y la migración #3 los copia automáticamente.
@@ -40,7 +41,7 @@ C:\Users\Rene_\.config\herd\bin\php83\php.exe artisan migrate
 | Capa | Tecnología |
 |------|-----------|
 | Framework | Laravel 13 |
-| PHP | 8.3 (Herd: `C:\Users\Rene_\.config\herd\bin\php83\php.exe`) |
+| PHP | 8.3 |
 | Auth | Laravel Sanctum — Bearer token |
 | RBAC | Spatie/Laravel-Permission v7 |
 | PDF | barryvdh/laravel-dompdf v3 |
@@ -71,8 +72,14 @@ C:\Users\Rene_\.config\herd\bin\php83\php.exe artisan migrate
 
 ## 🚢 Deploy
 
-Ver `.github/copilot-instructions.md` para el procedimiento completo de deploy a cPanel.
+**Producción EN VIVO** (sistema de dinero) — no desplegar sin OK explícito de René.
 
-- API producción: `https://api.lacasavolvo.com`
-- Staging frontend: `https://staging.lacasavolvo.com`
+El deploy se hace por la **API de cPanel (UAPI), NO por FTP**. Runbook canónico: `docs/DEPLOY.md` (gitignored). Forma rápida:
+
+```bash
+bash api/scripts/deploy/deploy-cpanel-api.sh --api <archivos relativos a api/> --spa
+```
+
+- API producción: `https://api.lacasavolvo.com` → BD `lacasavo_prod`
 - Producción frontend: `https://lacasavolvo.com`
+- Staging frontend: `https://staging.lacasavolvo.com` (en mantenimiento)
