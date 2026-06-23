@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTweaks, TweaksPanel } from './lib/tweaks.jsx';
 import { AppLayout, SUC_COLORS, ToastProvider } from './lib/components.jsx';
+import { useIdleLogout } from './lib/useIdleLogout.js';
 import { LoginScreen, Dashboard } from './screens/main.jsx';
 import { VentasIndex, VentaNueva, VentaDetail } from './screens/ventas.jsx';
 import { Productos, ProductoDetail } from './screens/productos.jsx';
@@ -239,6 +240,11 @@ export default function App() {
     setRoute({ name: 'login' });
   }
 
+  // Cierre de sesión por INACTIVIDAD (15 min; aviso con cuenta regresiva a los 5 min). El hook
+  // va a nivel de componente ANTES de cualquier return temprano (reglas de hooks). Solo activo
+  // con sesión; handleLogout (arriba) limpia ambos storages y vuelve al login.
+  const idle = useIdleLogout(!!user, handleLogout);
+
   /**
    * Cambia la sucursal activa del usuario.
    *
@@ -362,6 +368,7 @@ export default function App() {
       {/* Cartel NO bloqueante de "versión nueva" (sugerencia): no interrumpe el trabajo;
           avisa de terminar la operación en curso antes de recargar. */}
       {updateAvailable && <UpdateBanner />}
+      {idle.warning && <IdleWarningModal remainingMs={idle.remainingMs} onStay={idle.stayConnected} onLogout={handleLogout} />}
       {welcomeUser && (
         <div style={{position:'fixed', inset:0, zIndex:9999, display:'grid', placeItems:'center', background:'rgba(24,38,66,.9)', backdropFilter:'blur(10px)', animation:'fade .25s'}}>
           <div style={{textAlign:'center', color:'#fff', animation:'pop .4s cubic-bezier(.2,.8,.3,1.1)'}}>
@@ -415,5 +422,33 @@ export default function App() {
       <TweaksPanel title="Prototipo" />
     </>
     </ToastProvider>
+  );
+}
+
+/**
+ * Aviso de cierre por inactividad con cuenta regresiva. El usuario puede seguir conectado
+ * (onStay) o cerrar sesión ya (onLogout); cualquier actividad del mouse/teclado también lo
+ * cierra (ver useIdleLogout). Usa solo clases del design system (sin imports nuevos).
+ * @param {{remainingMs:number, onStay:function():void, onLogout:function():void}} props
+ */
+function IdleWarningModal({ remainingMs, onStay, onLogout }) {
+  const total = Math.max(0, Math.ceil(remainingMs / 1000));
+  const mm = String(Math.floor(total / 60)).padStart(2, '0');
+  const ss = String(total % 60).padStart(2, '0');
+  return (
+    <div className="overlay" style={{ zIndex: 10000 }} onClick={onStay}>
+      <div className="modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ padding: 24, textAlign: 'center' }}>
+          <i className="fa-solid fa-clock" style={{ fontSize: 30, color: 'var(--warning)', marginBottom: 12 }} />
+          <h3 style={{ fontSize: 17, margin: '0 0 6px' }}>¿Sigues ahí?</h3>
+          <p style={{ fontSize: 13, color: 'var(--soft)', margin: '0 0 6px' }}>Tu sesión se cerrará por inactividad en</p>
+          <div className="mono" style={{ fontSize: 32, fontWeight: 800, color: 'var(--ink)', letterSpacing: '.04em', margin: '0 0 18px' }}>{mm}:{ss}</div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <button className="btn btn-ghost" onClick={onLogout}>Cerrar sesión</button>
+            <button className="btn btn-accent" onClick={onStay}>Seguir conectado</button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

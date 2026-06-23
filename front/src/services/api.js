@@ -18,6 +18,25 @@ http.interceptors.request.use((config) => {
   return config;
 });
 
+// Interceptor de RESPONSE: ante un 401 (token vencido/revocado en otro dispositivo, o sesión
+// cerrada por inactividad en el server) limpia el token y vuelve al login, para no quedar en
+// una pantalla rota. Excluye /login (un 401 ahí = credenciales inválidas → lo maneja el form,
+// sin recargar). Solo recarga si HABÍA token, para no entrar en bucle en el arranque sin sesión.
+http.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const url = error?.config?.url || '';
+    if (status === 401 && !url.includes('/login')) {
+      const hadToken = localStorage.getItem('lcv_token') || sessionStorage.getItem('lcv_token');
+      localStorage.removeItem('lcv_token');
+      try { sessionStorage.removeItem('lcv_token'); } catch { /* noop */ }
+      if (hadToken) window.location.reload();
+    }
+    return Promise.reject(error);
+  }
+);
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const auth = {
   login:           (email, password) => http.post('/login', { email, password }),
