@@ -170,7 +170,11 @@ class ProductoController extends Controller
      */
     private static function buildRelevanceSQL(string $search): array
     {
-        $tokens = array_values(array_filter(explode(' ', $search), fn($t) => strlen($t) >= 2));
+        // Mismos conectores que SearchHelper: no rankear por "de/con/…" (ruido en el orden).
+        $tokens = array_values(array_filter(
+            explode(' ', $search),
+            fn($t) => strlen($t) >= 2 && !in_array(mb_strtolower($t), SearchHelper::STOPWORDS, true)
+        ));
         $parts = [];
         $bindings = [];
 

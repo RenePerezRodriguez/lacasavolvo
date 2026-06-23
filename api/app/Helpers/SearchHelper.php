@@ -15,6 +15,14 @@ use Illuminate\Database\Eloquent\Builder;
 class SearchHelper
 {
     /**
+     * Conectores/stopwords del español que NO deben forzar el AND multi-palabra: el usuario
+     * escribe "cilindro DE embrague CON depósito" y el producto puede ser "CILINDRO EMBRAGUE
+     * C/DEPOSITO" — sin esas palabras igual debe encontrarlo. (Los acentos ya los folda el
+     * collation utf8(mb4)_*_ci, así que no se normalizan acá.)
+     */
+    public const STOPWORDS = ['de', 'del', 'con', 'la', 'el', 'los', 'las', 'un', 'una', 'para', 'sin', 'en', 'por', 'al', 'que', 'su'];
+
+    /**
      * Aplica búsqueda tokenizada a un query Builder.
      *
      * @param Builder $query       Query de Eloquent al que agregar las condiciones.
@@ -34,16 +42,34 @@ class SearchHelper
         // Si es un número entero, buscar también por ID exacto
         $numericSearch = is_numeric($search) ? (int) $search : null;
 
-        // Tokenizar: dividir por espacios, filtrar tokens vacíos
-        $tokens = array_filter(explode(' ', $search), fn($t) => strlen($t) > 0);
+        // Tokens de CONTENIDO: descarta conectores (de/con/…) y tokens de 1 char, para que
+        // "cilindro de embrague" matchee aunque el producto no tenga literalmente "de".
+        $tokens = self::contentTokens($search);
 
-        // Si hay un solo token, hacer LIKE simple (más rápido)
+        // Si queda un solo token, LIKE simple (más rápido)
         if (count($tokens) === 1) {
-            return self::singleTokenSearch($query, $search, $directCols, $relCols, $numericSearch);
+            return self::singleTokenSearch($query, $tokens[0], $directCols, $relCols, $numericSearch);
         }
 
-        // Multi-token: cada token debe aparecer en AL MENOS una columna
+        // Multi-token: cada token de contenido debe aparecer en AL MENOS una columna (AND)
         return self::multiTokenSearch($query, $tokens, $directCols, $relCols, $numericSearch);
+    }
+
+    /**
+     * Divide en tokens descartando conectores (STOPWORDS) y tokens de 1 carácter (ruido).
+     * Si tras filtrar no queda ninguno (p. ej. solo se tecleó "de"), devuelve los crudos
+     * para no romper la búsqueda ni devolver toda la tabla.
+     *
+     * @return string[]
+     */
+    private static function contentTokens(string $search): array
+    {
+        $raw = array_values(array_filter(explode(' ', $search), fn($t) => strlen($t) > 0));
+        $content = array_values(array_filter(
+            $raw,
+            fn($t) => mb_strlen($t) >= 2 && !in_array(mb_strtolower($t), self::STOPWORDS, true)
+        ));
+        return !empty($content) ? $content : $raw;
     }
 
     /**

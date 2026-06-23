@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import logger from './logger.js';
+import { matchesQuery } from './textSearch.js';
 
 /**
  * Hook para persistir preferencia de columnas visibles/ocultas por módulo.
@@ -78,10 +79,11 @@ export function useListData(apiList, apiKpis, getParams, deps) {
 
 /**
  * Filtra (SOLO para visualización) los renglones YA AGREGADOS a un documento por código,
- * descripción, marca o ID. El '#' inicial se ignora ("#635" == "635"); query vacía → todos.
- * Generaliza el `devFiltrados` de VentaDetail. Distinto del buscador de AGREGAR producto.
+ * descripción, marca o ID. Tokeniza por palabras (cada palabra debe aparecer — AND), ignora
+ * conectores (de/con/…) y es insensible a acentos/mayúsculas, igual que el backend
+ * (ver textSearch.js / SearchHelper). El '#' inicial se ignora ("#635" == "635").
  *
- * ⚠️ NO altera totales: el documento SIEMPRE debe sumar sobre la lista COMPLETA de `detalles`,
+ * ⚠️ NO altera totales: el documento SIEMPRE suma sobre la lista COMPLETA de `detalles`,
  * nunca sobre el resultado de este filtro (que es solo para mostrar/encontrar un renglón).
  *
  * @param {Array<object>} detalles - Renglones del documento (codigo/descripcion/marca/producto_id|id).
@@ -89,12 +91,8 @@ export function useListData(apiList, apiKpis, getParams, deps) {
  * @returns {Array<object>} Subconjunto de `detalles` que coincide (mismas referencias).
  */
 export function filterDetalles(detalles, query) {
-  const ql = (query || '').trim().toLowerCase().replace(/^#/, '');
-  if (!ql) return detalles;
+  if (!query || !query.trim()) return detalles;
   return (detalles || []).filter(d =>
-    (d.codigo || '').toLowerCase().includes(ql) ||
-    (d.descripcion || '').toLowerCase().includes(ql) ||
-    (d.marca || '').toLowerCase().includes(ql) ||
-    String(d.producto_id ?? d.id) === ql
+    matchesQuery(`${d.codigo ?? ''} ${d.descripcion ?? ''} ${d.marca ?? ''}`, query, d.producto_id ?? d.id)
   );
 }

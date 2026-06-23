@@ -7,6 +7,24 @@ import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { productos as prodApi, cuentas as cuentasApi } from '../../services/api.js';
 import { canQuickAction } from '../roles.js';
 import { Icon, Button, Badge, CopyableCode } from './primitives.jsx';
+import { matchesQuery, highlightParts } from '../textSearch.js';
+
+/**
+ * Resalta (marca) las coincidencias de `query` dentro de `text`, insensible a acentos y
+ * mayúsculas. Usado en los resultados de los buscadores (pedido de QA: ver qué matcheó).
+ * @param {{text:string, query:string}} props
+ * @returns {JSX.Element}
+ */
+function Highlight({ text, query }) {
+  const parts = highlightParts(text, query);
+  return (
+    <>
+      {parts.map((p, i) => p.match
+        ? <mark key={i} style={{ background: 'var(--accent-a30)', color: 'inherit', padding: 0, borderRadius: 2 }}>{p.text}</mark>
+        : <React.Fragment key={i}>{p.text}</React.Fragment>)}
+    </>
+  );
+}
 
 
 /**
@@ -144,7 +162,7 @@ export function SearchModal({ onClose, onNav, onProductClick, effectivePermissio
                   <span style={{flex:1, minWidth: compact ? 0 : 150, display:"flex", flexDirection:"column"}}>
                     {/* Descripción SELECCIONABLE (QA): poder copiarla como en Productos. userSelect:text
                         + el guard openIfNoSelection evitan que seleccionar dispare la navegación. */}
-                    <span style={{fontSize:13, fontWeight:600, color:"var(--body)", lineHeight:1.4, userSelect:"text", cursor:"text"}}>{p.descripcion}</span>
+                    <span style={{fontSize:13, fontWeight:600, color:"var(--body)", lineHeight:1.4, userSelect:"text", cursor:"text"}}><Highlight text={p.descripcion} query={q}/></span>
                     <span style={{fontSize:10.5, color:"var(--soft)", fontWeight:600, letterSpacing:".04em", marginTop: 2, userSelect:"text"}}>{marcaNombre}</span>
                   </span>
                 );
@@ -290,7 +308,7 @@ export function ProductSearchInput({ onSelect, placeholder = "Buscar producto…
                 <span className="mono" style={{fontSize:11, fontWeight:700, color:"var(--accent)", background:"var(--accent-soft)", padding:"3px 7px", borderRadius:4, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{p.codigo}</span>
               </span>
               <span style={{flex:1, minWidth:0}}>
-                <span style={{fontSize:13, fontWeight:500, color:"var(--body)", display:"block", lineHeight:1.3}}>{p.descripcion}</span>
+                <span style={{fontSize:13, fontWeight:500, color:"var(--body)", display:"block", lineHeight:1.3}}><Highlight text={p.descripcion} query={q}/></span>
                 {p.marca && <span style={{fontSize:10.5, color:"var(--soft)", fontWeight:600, letterSpacing:".04em"}}>{typeof p.marca === 'object' ? p.marca.nombre : p.marca}</span>}
               </span>
               {showStock && (
@@ -483,8 +501,7 @@ export function ComboSelect({ options = [], value, onChange, placeholder = 'Busc
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
-  const q = query.trim().toLowerCase();
-  const filtered = q ? options.filter(o => (o.nombre || '').toLowerCase().includes(q)) : options;
+  const filtered = query.trim() ? options.filter(o => matchesQuery(o.nombre || '', query)) : options;
 
   const pick = (o) => { onChange(String(o.id)); setOpen(false); setQuery(''); };
 
