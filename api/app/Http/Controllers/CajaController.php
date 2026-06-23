@@ -7,6 +7,7 @@ use App\Models\Apertura;
 use App\Models\Cierre;
 use App\Models\Compradetalle;
 use App\Models\Ventadetalle;
+use App\Helpers\SearchHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -434,8 +435,15 @@ class CajaController extends Controller
         $ini  = $request->get('desde', Carbon::today()->toDateString());
         $fin  = $request->get('hasta', Carbon::today()->toDateString());
 
-        $rows = Tranza::where('sucursal_id', $sid)->whereBetween('fecha', [$ini, $fin])
-            ->where('estado', 'ON')->orderBy('fecha')->orderBy('id')->get();
+        $q = Tranza::where('sucursal_id', $sid)->whereBetween('fecha', [$ini, $fin])
+            ->where('estado', 'ON');
+        // Buscador de conceptos (paridad legacy): filtra por descripción y clase. SearchHelper
+        // agrupa sus condiciones en un where() → no contamina sucursal/estado/fecha. Los totales
+        // se recalculan sobre $rows YA filtrado para que los KPIs reflejen lo buscado.
+        if ($request->filled('search')) {
+            SearchHelper::apply($q, $request->search, ['tranzas.descripcion', 'tranzas.clase']);
+        }
+        $rows = $q->orderBy('fecha')->orderBy('id')->get();
 
         return response()->json(['data' => $rows->map(fn($t) => [
             'id' => $t->id, 'fecha' => $t->fecha, 'clase' => $t->clase,
@@ -493,9 +501,13 @@ class CajaController extends Controller
         $fin  = $request->get('hasta', Carbon::today()->toDateString());
         $clases = ['ENT', 'SAL', 'D-COM', 'D-VEN', 'ENV', 'REC', 'PAG', 'COB'];
 
-        $rows = Tranza::where('sucursal_id', $sid)->whereBetween('fecha', [$ini, $fin])
-            ->where('estado', 'ON')->whereIn('clase', $clases)
-            ->orderBy('fecha', 'desc')->orderBy('id', 'desc')->get();
+        $q = Tranza::where('sucursal_id', $sid)->whereBetween('fecha', [$ini, $fin])
+            ->where('estado', 'ON')->whereIn('clase', $clases);
+        // Buscador de conceptos sobre los efectivos (se suma AND a las clases de efectivo).
+        if ($request->filled('search')) {
+            SearchHelper::apply($q, $request->search, ['tranzas.descripcion', 'tranzas.clase']);
+        }
+        $rows = $q->orderBy('fecha', 'desc')->orderBy('id', 'desc')->get();
 
         return response()->json(['data' => $rows->map(fn($t) => [
             'id' => $t->id, 'fecha' => $t->fecha, 'clase' => $t->clase,

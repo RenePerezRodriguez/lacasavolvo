@@ -5,6 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import logger from '../lib/logger.js';
 import { Icon, Button, Badge, KPI, Empty, PageHead } from '../lib/components.jsx';
+import { matchesQuery } from '../lib/textSearch.js';
 import { caja as cajaApi } from '../services/api.js';
 import { claseLabel } from '../lib/clase.js';
 
@@ -117,6 +118,7 @@ export function HistorialCaja({ onNav, sucursalId }) {
   const hoy = new Date().toISOString().slice(0,10);
   const hace30 = new Date(Date.now() - 30*24*60*60*1000).toISOString().slice(0,10);
   const [tab, setTab]     = useState("tranzas");
+  const [q, setQ]         = useState("");
   const [desde, setDesde] = useState(hace30);
   const [hasta, setHasta] = useState(hoy);
   const [data, setData]   = useState(null);
@@ -125,7 +127,7 @@ export function HistorialCaja({ onNav, sucursalId }) {
 
   const load = () => {
     setLoading(true);
-    const params = { desde, hasta };
+    const params = { desde, hasta, ...(q.trim() ? { search: q } : {}) };
     const fn = tab === "tranzas"   ? cajaApi.historialTranzas
              : tab === "compras"   ? cajaApi.historialCompras
              : tab === "ventas"    ? cajaApi.historialVentas
@@ -137,11 +139,22 @@ export function HistorialCaja({ onNav, sucursalId }) {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, [tab, desde, hasta, sucursalId]);
+  // Debounce: incluye el tipeo del buscador de concepto (manda `search` al backend).
+  useEffect(() => {
+    const t = setTimeout(load, 250);
+    return () => clearTimeout(t);
+  }, [tab, desde, hasta, sucursalId, q]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const rows = data?.data ?? [];
-  const totalIngresos = data?.total_ingresos;
-  const totalEgresos  = data?.total_egresos;
+  const allRows = data?.data ?? [];
+  // Filtro de conceptos client-side (instantáneo) sobre las filas cargadas; el backend además
+  // ya filtró por `search` (los dos caminos). `rows` pasa a ser la lista filtrada → las tablas
+  // y KPIs de abajo la usan sin cambios. Cubre descripción/clase/código/marca/fecha + ID.
+  const rows = q.trim()
+    ? allRows.filter(r => matchesQuery(`${r.descripcion ?? ''} ${r.clase ?? ''} ${r.codigo ?? ''} ${r.marca ?? ''} ${r.fecha ?? ''}`, q, r.id))
+    : allRows;
+  // KPIs (ingresos/egresos) recalculados SOBRE lo filtrado, no sobre todo el período.
+  const totalIngresos = (tab === 'tranzas' || tab === 'efectivos') ? rows.reduce((s, r) => s + (Number(r.ingreso) || 0), 0) : undefined;
+  const totalEgresos  = (tab === 'tranzas' || tab === 'efectivos') ? rows.reduce((s, r) => s + (Number(r.egreso) || 0), 0) : undefined;
 
   return (
     <div className="fade-up stack" style={{"--gap":"24px"}}>
@@ -158,6 +171,12 @@ export function HistorialCaja({ onNav, sucursalId }) {
             <input className="input" type="date" aria-label="Hasta" value={hasta} onChange={e=>{ setHasta(e.target.value); }}/>
           </div>
           <Button variant="accent" icon="fa-search" onClick={load}>Buscar</Button>
+          <div className="field" style={{marginBottom:0, flex:1, minWidth:200}}><label className="label">Buscar concepto</label>
+            <div className="input-group">
+              <span className="lead-icon"><Icon name="fa-magnifying-glass" style={{fontSize:12}}/></span>
+              <input className="input" placeholder="Filtrar por descripción / concepto…" value={q} onChange={e=>setQ(e.target.value)} aria-label="Buscar concepto"/>
+            </div>
+          </div>
         </div>
       </div>
 
