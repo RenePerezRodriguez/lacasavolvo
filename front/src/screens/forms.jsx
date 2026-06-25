@@ -664,6 +664,15 @@ export function ProductoFormModal({ onClose, onSaved, edit }) {
 
       {tab === "basico" && (
         <div className="stack" style={{"--gap":"14px"}}>
+          {/* ID interno del producto (solo lectura, solo al editar) — paridad con el legacy,
+              que mostraba "ID : 2659" en la cabecera (pedido de QA Tefy 24/6). OJO: el ID NO
+              es el código; son campos distintos. */}
+          {edit && (
+            <div className="row" style={{justifyContent:"space-between", alignItems:"center", padding:"8px 12px", background:"var(--accent-a15)", borderRadius:"var(--r-md)", border:"1px solid var(--line)"}}>
+              <span className="label" style={{margin:0}}>ID del producto</span>
+              <span className="mono" style={{fontWeight:700, color:"var(--ink)", fontSize:14}}>#{edit.id}</span>
+            </div>
+          )}
           <div className="field">
             <label className="label">Código <R/></label>
             <input ref={codigoRef} className="input mono" placeholder="VOL-FH-1241" value={form.codigo} onChange={set('codigo')}
