@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useListData, useColumnVisibility, filterDetalles, recalcSubtotal } from '../lib/hooks.js';
+import { useListData, useColumnVisibility, filterDetalles, recalcSubtotal, previewSubtotal } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
 import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader, RowFilterInput } from '../lib/components.jsx';
 import { CotizacionFormModal, EncabezadoModal } from './forms.jsx';
@@ -253,8 +253,22 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
    */
   function updatePrecio(item, nuevoPrecio) {
     const precio = parseFloat(nuevoPrecio);
-    if (isNaN(precio) || precio < 0 || precio === parseFloat(item.costo)) return;
+    if (isNaN(precio) || precio < 0 || precio === parseFloat(item.costo)) {
+      // valor inválido/vacío o sin cambio real: deshacer el preview y restaurar el subtotal real
+      setDetalles(prev => prev.map(d => d.id === item.id ? recalcSubtotal(d, {}) : d));
+      return;
+    }
     saveItem(item, { costo: precio });
+  }
+
+  /**
+   * Preview EN VIVO del total al teclear el precio: recalcula el subtotal local en cada
+   * pulsación SIN tocar `costo` ni el server (la persistencia ocurre en onBlur → updatePrecio).
+   * @param {object} item - Renglón a previsualizar.
+   * @param {string} raw - Valor crudo del input de precio.
+   */
+  function previewPrecio(item, raw) {
+    setDetalles(prev => prev.map(d => d.id === item.id ? previewSubtotal(d, raw) : d));
   }
 
   async function removeItem(item) {
@@ -418,6 +432,7 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
                                 type="number" min="0" step="any"
                                 defaultValue={parseFloat(it.costo).toFixed(2)}
                                 disabled={saving}
+                                onChange={(e) => previewPrecio(it, e.target.value)}
                                 onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                                 onBlur={(e) => updatePrecio(it, e.target.value)}
                                 style={{textAlign:"right", fontSize:13, padding:"6px 8px 6px 28px"}}

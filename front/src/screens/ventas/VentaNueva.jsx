@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Icon, Button, Badge, Card, Empty, PageHead, ProductSearchInput, AccountSearchInput, QtyStepper, RowFilterInput } from '../../lib/components.jsx';
-import { filterDetalles, recalcSubtotal } from '../../lib/hooks.js';
+import { filterDetalles, recalcSubtotal, previewSubtotal } from '../../lib/hooks.js';
 import { ventas as ventasApi } from '../../services/api.js';
 
 /**
@@ -134,8 +134,22 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
    */
   function updatePrecio(item, nuevoPrecio) {
     const precio = parseFloat(nuevoPrecio);
-    if (isNaN(precio) || precio < 0 || precio === parseFloat(item.costo)) return;
+    if (isNaN(precio) || precio < 0 || precio === parseFloat(item.costo)) {
+      // valor inválido/vacío o sin cambio real: deshacer el preview y restaurar el subtotal real
+      setDetalles(prev => prev.map(d => d.id === item.id ? recalcSubtotal(d, {}) : d));
+      return;
+    }
     saveItem(item, { costo: precio });
+  }
+
+  /**
+   * Preview EN VIVO del total al teclear el precio: recalcula el subtotal local en cada
+   * pulsación SIN tocar `costo` ni el server (la persistencia ocurre en onBlur → updatePrecio).
+   * @param {object} item - Renglón a previsualizar.
+   * @param {string} raw - Valor crudo del input de precio.
+   */
+  function previewPrecio(item, raw) {
+    setDetalles(prev => prev.map(d => d.id === item.id ? previewSubtotal(d, raw) : d));
   }
 
   /**
@@ -326,6 +340,7 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
                               type="number" min="0" step="any"
                               defaultValue={parseFloat(it.costo).toFixed(2)}
                               disabled={saving}
+                              onChange={(e) => previewPrecio(it, e.target.value)}
                               onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                               onBlur={(e) => updatePrecio(it, e.target.value)}
                               style={{textAlign:"right", fontSize:13, padding:"6px 8px 6px 28px"}}

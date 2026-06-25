@@ -116,3 +116,23 @@ export function recalcSubtotal(detalle, patch) {
   const cant  = parseInt(next.cantidad, 10) || 0;
   return { ...next, subtotal_num: costo * cant };
 }
+
+/**
+ * Calcula el `subtotal_num` de un renglón para el PREVIEW EN VIVO del total mientras se teclea
+ * el PRECIO, SIN modificar `costo`. Es deliberadamente distinto de {@link recalcSubtotal}: el
+ * input de precio es uncontrolled y su `key` depende de `costo`, de modo que tocar `costo` aquí
+ * remontaría el input y haría perder el foco / lo que se está tecleando. El `costo` definitivo se
+ * persiste en onBlur (updateCosto/updatePrecio). Como el total global y el subtotal del renglón
+ * leen `subtotal_num`, el total se actualiza en CADA pulsación —sin tener que hacer clic afuera—,
+ * replicando la respuesta inmediata del legacy (QA Tefy 24-25/6: "solo cambia cuando haces click
+ * en otro sector"). Tolera valores parciales/vacíos (→ subtotal 0 temporal).
+ *
+ * @param {object} detalle - Renglón (debe traer `cantidad`).
+ * @param {string|number} costoRaw - Valor crudo del input de precio (posiblemente parcial).
+ * @returns {object} Nuevo renglón con `subtotal_num` recalculado; `costo` intacto.
+ */
+export function previewSubtotal(detalle, costoRaw) {
+  const costo = parseFloat(costoRaw) || 0;
+  const cant  = parseInt(detalle.cantidad, 10) || 0;
+  return { ...detalle, subtotal_num: costo * cant };
+}
