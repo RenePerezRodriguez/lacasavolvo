@@ -3,8 +3,8 @@
  * validación (actualiza stock), pagos y anulación.
  */
 
-import React, { useState, useEffect } from 'react';
-import { useListData, useColumnVisibility, filterDetalles } from '../lib/hooks.js';
+import React, { useState, useEffect, useRef } from 'react';
+import { useListData, useColumnVisibility, filterDetalles, recalcSubtotal } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
 import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader, RowFilterInput } from '../lib/components.jsx';
 import { CompraFormModal, EncabezadoModal } from './forms.jsx';
@@ -179,6 +179,10 @@ export function CompraDetail({ compraId, compraData, onNav }) {
   const [devs, setDevs]             = useState([]);
   const [loading, setLoading]       = useState(true);
   const [saving, setSaving]         = useState(false);
+  // Guardado de ítems NO bloqueante (no deshabilita la edición; solo muestra el spinner
+  // sutil): el total se ve al instante de forma optimista y la persistencia va detrás.
+  const [savingItem, setSavingItem] = useState(false);
+  const inflight  = useRef(0);     // operaciones de ítem en vuelo (reconcilia solo la última)
   const [c, setC]                   = useState(compraData ?? null);
   const [showPagar, setShowPagar]   = useState(false);
   const [montoPago, setMontoPago]   = useState('');
@@ -223,17 +227,32 @@ export function CompraDetail({ compraId, compraData, onNav }) {
     finally { setSaving(false); }
   }
 
-  async function updateCant(item, newCant) {
-    if (newCant < 1) return; setSaving(true);
-    try { await comprasApi.updateItem({ registro: item.id, costo: parseFloat(item.costo), cantidad: newCant }); await Promise.all([reloadDetalles(), reloadHeader()]); }
-    finally { setSaving(false); }
+  /**
+   * Aplica un cambio de costo/cantidad de forma OPTIMISTA (el total se recalcula al instante)
+   * y lo persiste en segundo plano. Replica la respuesta inmediata del legacy: la UI no espera
+   * el round-trip. Reconcilia con el `subtotal_num` del server al terminar la última operación
+   * en vuelo (evita parpadeo en ediciones rápidas); ante error revierte recargando del server.
+   * @param {object} item - Renglón a modificar.
+   * @param {{costo?: number, cantidad?: number}} patch - Campo editado.
+   */
+  function saveItem(item, patch) {
+    setDetalles(prev => prev.map(d => d.id === item.id ? recalcSubtotal(d, patch) : d)); // optimista
+    const costo    = patch.costo    != null ? patch.costo    : parseFloat(item.costo);
+    const cantidad = patch.cantidad != null ? patch.cantidad : item.cantidad;
+    inflight.current++; setSavingItem(true);
+    comprasApi.updateItem({ registro: item.id, costo, cantidad })
+      .then(() => { if (inflight.current === 1) return Promise.all([reloadDetalles(), reloadHeader()]); })
+      .catch(e => { setError(e?.response?.data?.error ?? 'Error al actualizar el ítem'); return Promise.all([reloadDetalles(), reloadHeader()]); })
+      .finally(() => { inflight.current--; if (inflight.current === 0) setSavingItem(false); });
   }
-  async function updateCosto(item, newCosto) {
+  function updateCant(item, newCant) {
+    if (newCant < 1 || newCant === item.cantidad) return;
+    saveItem(item, { cantidad: newCant });
+  }
+  function updateCosto(item, newCosto) {
     const c = parseFloat(newCosto);
-    if (isNaN(c) || c < 0) return;
-    setSaving(true);
-    try { await comprasApi.updateItem({ registro: item.id, costo: c, cantidad: item.cantidad }); await Promise.all([reloadDetalles(), reloadHeader()]); }
-    finally { setSaving(false); }
+    if (isNaN(c) || c < 0 || c === parseFloat(item.costo)) return;
+    saveItem(item, { costo: c });
   }
   async function removeItem(item) {
     setSaving(true);
@@ -368,7 +387,7 @@ export function CompraDetail({ compraId, compraData, onNav }) {
               <div className="row" style={{gap:12}}>
                 <span style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>Ítems de compra</span>
                 <Badge tone="neutral">{detalles.length}</Badge>
-                {saving && <Icon name="fa-spinner fa-spin" style={{fontSize:12,color:"var(--soft)"}}/>}
+                {(saving || savingItem) && <Icon name="fa-spinner fa-spin" style={{fontSize:12,color:"var(--soft)"}}/>}
               </div>
               {detalles.length > 0 && <RowFilterInput value={filtroItems} onChange={setFiltroItems} count={itemsVisibles.length} total={detalles.length}/>}
             </div>
@@ -400,12 +419,14 @@ export function CompraDetail({ compraId, compraData, onNav }) {
                       <td className="right mono tabular" style={{fontSize:13}}>
                         {estado === 'PROFORMA' ? (
                           <input className="input mono" type="number" min="0" step="any"
+                            key={`c-${it.id}-${it.costo}`}
                             defaultValue={parseFloat(it.costo)}
+                            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                             onBlur={e => updateCosto(it, e.target.value)}
                             style={{width:100,textAlign:"right",padding:"3px 6px",fontSize:12}}/>
                         ) : <>Bs {parseFloat(it.costo).toFixed(2)}</>}
                       </td>
-                      <td className="right mono tabular strong" style={{fontSize:13,fontWeight:700}}>{it.subtotal}</td>
+                      <td className="right mono tabular strong" style={{fontSize:13,fontWeight:700}}>Bs {Number(it.subtotal_num ?? parseFloat(it.costo) * it.cantidad).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
                       {estado === 'PROFORMA' && <td><button className="icon-btn danger" disabled={saving} onClick={()=>removeItem(it)}><Icon name="fa-trash" style={{fontSize:11}}/></button></td>}
                     </tr>
                   ))}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Icon, Button, Badge, Card, Empty, PageHead, ProductSearchInput, AccountSearchInput, QtyStepper, RowFilterInput } from '../../lib/components.jsx';
-import { filterDetalles } from '../../lib/hooks.js';
+import { filterDetalles, recalcSubtotal } from '../../lib/hooks.js';
 import { ventas as ventasApi } from '../../services/api.js';
 
 /**
@@ -20,6 +20,9 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
   const [tipo, setTipo]               = useState(initialData?.tipo || 'CONTADO');
   const [fecha, setFecha]             = useState(initialData?.fecha_raw || today);
   const [saving, setSaving]           = useState(false);
+  // Guardado de ítems NO bloqueante: total optimista al instante, persistencia detrás.
+  const [savingItem, setSavingItem]   = useState(false);
+  const inflight                      = useRef(0);
   const [creando, setCreando]         = useState(false);
   const [showCliente, setShowCliente] = useState(false);
   const [clienteSearchKey, setClienteSearchKey] = useState(0);
@@ -98,33 +101,41 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
    * @param {object} item - Detalle de venta.
    * @param {number} newCant - Nueva cantidad (mínimo 1).
    */
-  async function updateCant(item, newCant) {
-    if (newCant < 1 || !ventaId) return;
-    setNegativos([]);
-    setSaving(true);
-    try {
-      await ventasApi.updateItem({ registro: item.id, costo: parseFloat(item.costo), cantidad: newCant });
-      await reloadDetalles(ventaId);
-    } finally { setSaving(false); }
+  /**
+   * Aplica un cambio de precio/cantidad de forma OPTIMISTA (el total se recalcula al instante,
+   * sin esperar el round-trip — como el legacy) y lo persiste en segundo plano. Reconcilia con
+   * el `subtotal_num` del server al terminar la última operación en vuelo; ante error revierte.
+   * @param {object} item - Renglón de venta.
+   * @param {{costo?: number, cantidad?: number}} patch - Campo editado.
+   */
+  function saveItem(item, patch) {
+    if (!ventaId) return;
+    setNegativos([]); // los ítems cambiaron → la alerta de stock queda obsoleta
+    setDetalles(prev => prev.map(d => d.id === item.id ? recalcSubtotal(d, patch) : d)); // optimista
+    const costo    = patch.costo    != null ? patch.costo    : parseFloat(item.costo);
+    const cantidad = patch.cantidad != null ? patch.cantidad : item.cantidad;
+    inflight.current++; setSavingItem(true);
+    ventasApi.updateItem({ registro: item.id, costo, cantidad })
+      .then(() => { if (inflight.current === 1) return reloadDetalles(ventaId); })
+      .catch(e => { setError(e?.response?.data?.error ?? 'Error al actualizar el ítem'); return reloadDetalles(ventaId); })
+      .finally(() => { inflight.current--; if (inflight.current === 0) setSavingItem(false); });
+  }
+  function updateCant(item, newCant) {
+    if (newCant < 1 || newCant === item.cantidad) return;
+    saveItem(item, { cantidad: newCant });
   }
 
   /**
    * Cambia el PRECIO unitario de un ítem (precio de venta, editable hasta la v2 — no hay
-   * modalidad de descuentos todavía). Reusa updateItem con la cantidad actual. Ignora
-   * valores no numéricos o negativos (el backend igual valida min:0).
+   * modalidad de descuentos todavía). Ignora valores no numéricos o negativos (el backend
+   * igual valida min:0).
    * @param {object} item - Detalle de venta.
    * @param {number|string} nuevoPrecio - Nuevo precio unitario.
    */
-  async function updatePrecio(item, nuevoPrecio) {
+  function updatePrecio(item, nuevoPrecio) {
     const precio = parseFloat(nuevoPrecio);
-    if (!ventaId || isNaN(precio) || precio < 0) return;
-    if (precio === parseFloat(item.costo)) return; // sin cambios → no llamamos a la API
-    setNegativos([]);
-    setSaving(true);
-    try {
-      await ventasApi.updateItem({ registro: item.id, costo: precio, cantidad: item.cantidad });
-      await reloadDetalles(ventaId);
-    } finally { setSaving(false); }
+    if (isNaN(precio) || precio < 0 || precio === parseFloat(item.costo)) return;
+    saveItem(item, { costo: precio });
   }
 
   /**
@@ -269,7 +280,7 @@ export function VentaNueva({ onNav, onComplete, sucursalId, initialId, initialDa
               <div className="row" style={{gap:12}}>
                 <span style={{fontSize:13, fontWeight:700, color:"var(--ink)"}}>Productos</span>
                 <Badge tone="neutral">{detalles.length} {detalles.length === 1 ? "ítem" : "ítems"}</Badge>
-                {(saving || creando) && <Icon name="fa-spinner fa-spin" style={{fontSize:12, color:"var(--soft)"}}/>}
+                {(saving || creando || savingItem) && <Icon name="fa-spinner fa-spin" style={{fontSize:12, color:"var(--soft)"}}/>}
               </div>
               {detalles.length > 0 && <RowFilterInput value={filtroItems} onChange={setFiltroItems} count={itemsVisibles.length} total={detalles.length}/>}
             </div>

@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useListData, useColumnVisibility, filterDetalles } from '../lib/hooks.js';
+import { useListData, useColumnVisibility, filterDetalles, recalcSubtotal } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
 import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader, RowFilterInput } from '../lib/components.jsx';
 import { CotizacionFormModal, EncabezadoModal } from './forms.jsx';
@@ -188,6 +188,9 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
   const itemsVisibles = filterDetalles(detalles, filtroItems);
   const [loading, setLoading]       = useState(true);
   const [saving, setSaving]         = useState(false);
+  // Guardado de ítems NO bloqueante: total optimista al instante, persistencia detrás.
+  const [savingItem, setSavingItem] = useState(false);
+  const inflight                    = useRef(0);
   const [converting, setConverting] = useState(false);
   const [c, setC]                   = useState(cotizacionData ?? null);
   const [error, setError]           = useState(null);
@@ -217,24 +220,41 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
     finally { setSaving(false); }
   }
 
-  async function updateCant(item, newCant) {
-    if (newCant < 1) return; setSaving(true);
-    try { await cotizApi.updateItem({ registro: item.id, cantidad: newCant }); await reload(); }
-    finally { setSaving(false); }
+  /**
+   * Aplica un cambio de precio/cantidad de forma OPTIMISTA (el total se recalcula al instante,
+   * sin esperar el round-trip — como el legacy) y lo persiste en segundo plano. El endpoint de
+   * cotizaciones recibe el precio como `precio`; en updateCant no se reenvía (conserva el del
+   * registro). Reconcilia con el server al terminar la última operación en vuelo; ante error revierte.
+   * @param {object} item - Renglón de cotización.
+   * @param {{costo?: number, cantidad?: number}} patch - Campo editado (`costo` = nuevo precio).
+   */
+  function saveItem(item, patch) {
+    setDetalles(prev => prev.map(d => d.id === item.id ? recalcSubtotal(d, patch) : d)); // optimista
+    const cantidad = patch.cantidad != null ? patch.cantidad : item.cantidad;
+    const payload  = patch.costo != null
+      ? { registro: item.id, cantidad, precio: patch.costo }
+      : { registro: item.id, cantidad };
+    inflight.current++; setSavingItem(true);
+    cotizApi.updateItem(payload)
+      .then(() => { if (inflight.current === 1) return reload(); })
+      .catch(e => { setError(e?.response?.data?.error ?? 'Error al actualizar el ítem'); return reload(); })
+      .finally(() => { inflight.current--; if (inflight.current === 0) setSavingItem(false); });
+  }
+  function updateCant(item, newCant) {
+    if (newCant < 1 || newCant === item.cantidad) return;
+    saveItem(item, { cantidad: newCant });
   }
 
   /**
    * Cambia el PRECIO unitario de un ítem de la cotización (editable hasta la v2, igual que
-   * en ventas — pedido de QA). El endpoint de cotizaciones recibe el precio como `precio`.
+   * en ventas — pedido de QA).
    * @param {object} item - Detalle de cotización.
    * @param {number|string} nuevoPrecio - Nuevo precio unitario.
    */
-  async function updatePrecio(item, nuevoPrecio) {
+  function updatePrecio(item, nuevoPrecio) {
     const precio = parseFloat(nuevoPrecio);
     if (isNaN(precio) || precio < 0 || precio === parseFloat(item.costo)) return;
-    setSaving(true);
-    try { await cotizApi.updateItem({ registro: item.id, cantidad: item.cantidad, precio }); await reload(); }
-    finally { setSaving(false); }
+    saveItem(item, { costo: precio });
   }
 
   async function removeItem(item) {
@@ -358,7 +378,7 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
               <div className="row" style={{gap:12}}>
                 <span style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>Productos de la cotización</span>
                 <Badge tone="neutral">{detalles.length}</Badge>
-                {saving && <Icon name="fa-spinner fa-spin" style={{fontSize:12,color:"var(--soft)"}}/>}
+                {(saving || savingItem) && <Icon name="fa-spinner fa-spin" style={{fontSize:12,color:"var(--soft)"}}/>}
               </div>
               {detalles.length > 0 && <RowFilterInput value={filtroItems} onChange={setFiltroItems} count={itemsVisibles.length} total={detalles.length}/>}
             </div>
@@ -417,7 +437,7 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
                           </div>
                         ) : `Bs ${parseFloat(it.costo).toFixed(2)}`}
                       </td>
-                      <td className="right mono tabular strong">{it.subtotal ?? `Bs ${(parseFloat(it.costo ?? 0) * it.cantidad).toFixed(2)}`}</td>
+                      <td className="right mono tabular strong">Bs {Number(it.subtotal_num ?? parseFloat(it.costo ?? 0) * it.cantidad).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
                       {editable && <td><button className="icon-btn danger" disabled={saving} onClick={()=>removeItem(it)}><Icon name="fa-trash" style={{fontSize:11}}/></button></td>}
                     </tr>
                   ))}

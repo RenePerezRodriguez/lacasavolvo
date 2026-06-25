@@ -96,3 +96,23 @@ export function filterDetalles(detalles, query) {
     matchesQuery(`${d.codigo ?? ''} ${d.descripcion ?? ''} ${d.marca ?? ''}`, query, d.producto_id ?? d.id)
   );
 }
+
+/**
+ * Recalcula el `subtotal_num` de un renglón en RAM (costo × cantidad) tras aplicar `patch`,
+ * para reflejar el total AL INSTANTE mientras se edita precio/cantidad — sin esperar el
+ * round-trip al servidor (el legacy lo hacía así; el sistema nuevo dependía del refetch y
+ * "tardaba", QA Tefy 24/6). El backend persiste en segundo plano y reconcilia con su
+ * `subtotal_num` autoritativo: para un costo TIPEADO (≤2 decimales) `costo×cantidad` coincide
+ * exactamente con lo que guardará el server, por lo que NO rompe el fix de decimales (los
+ * descuadres heredados venían de costos derivados de divisiones, no de costos tipeados).
+ *
+ * @param {object} detalle - Renglón del documento (debe traer `costo` y `cantidad`).
+ * @param {object} patch - Campos a sobreescribir (ej. `{costo}` o `{cantidad}`).
+ * @returns {object} Nuevo renglón con `patch` aplicado y `subtotal_num` recalculado.
+ */
+export function recalcSubtotal(detalle, patch) {
+  const next  = { ...detalle, ...patch };
+  const costo = parseFloat(next.costo) || 0;
+  const cant  = parseInt(next.cantidad, 10) || 0;
+  return { ...next, subtotal_num: costo * cant };
+}
