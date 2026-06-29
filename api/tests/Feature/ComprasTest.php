@@ -60,6 +60,35 @@ class ComprasTest extends TestCase
         $this->assertEquals(15, Producto::find($producto->id)->$stockCol);
     }
 
+    public function test_agregar_item_duplicado_en_compra_es_bloqueado(): void
+    {
+        $user = $this->actingAsUser();
+        $cuenta = Cuenta::factory()->proveedor()->create();
+        $producto = Producto::factory()->create(['stock1' => 5]);
+
+        $compra = Compra::factory()->create([
+            'sucursal_id' => $user->sucursal_id, 'cuenta_id' => $cuenta->id, 'estado' => 'PROFORMA',
+        ]);
+
+        // Primer agregado del repuesto: OK.
+        $this->postJson('/api/compras/agregar-item', [
+            'compra_id'  => $compra->id,
+            'producto_id'=> $producto->id,
+            'cantidad'   => 3,
+        ])->assertStatus(200);
+
+        // Segundo agregado del MISMO repuesto: rechazado (Compras no admite líneas duplicadas).
+        $this->postJson('/api/compras/agregar-item', [
+            'compra_id'  => $compra->id,
+            'producto_id'=> $producto->id,
+            'cantidad'   => 2,
+        ])->assertStatus(422);
+
+        // Queda un único renglón VALIDO de ese producto en la compra.
+        $this->assertEquals(1, \App\Models\Compradetalle::where('compra_id', $compra->id)
+            ->where('producto_id', $producto->id)->where('estado', 'VALIDO')->count());
+    }
+
     public function test_pagar_compra_actualiza_pagado(): void
     {
         $user = $this->actingAsUser();

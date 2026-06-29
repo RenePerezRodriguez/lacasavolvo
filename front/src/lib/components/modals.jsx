@@ -89,7 +89,7 @@ export function ProductQuickViewModal({ product, onClose, onMovimientos, onNav }
         {/* footer */}
         <div style={{padding: 12, borderTop:"1px solid var(--line)", background:"var(--alt)", display:"flex", gap: 8}}>
           <Button variant="secondary" icon="fa-arrow-left" onClick={onClose} style={{flex:1}}>Salir</Button>
-          <Button variant="secondary" icon="fa-eye" onClick={() => { onClose(); onNav("productos"); }} style={{flex:1}}>Ver ficha</Button>
+          <Button variant="secondary" icon="fa-eye" onClick={() => { onClose(); onNav({ name: 'producto-detail', id: product.id, pData: product }); }} style={{flex:1}}>Ver ficha</Button>
           <Button variant="accent" icon="fa-arrow-right-arrow-left" onClick={onMovimientos} style={{flex:1.4}}>Movimientos</Button>
         </div>
       </div>

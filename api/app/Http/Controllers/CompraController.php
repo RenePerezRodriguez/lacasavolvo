@@ -150,6 +150,17 @@ class CompraController extends Controller
         return response()->json(true);
     }
 
+    /**
+     * Agrega un renglón de producto a una compra PROFORMA.
+     *
+     * A diferencia de Ventas (que consolida el mismo producto en una sola línea), en Compras
+     * NO se admite el mismo repuesto en dos renglones (decisión de la clienta 25/6: notificar/
+     * bloquear). Un duplicado en una compra oculta errores que recién se detectan cuando el total
+     * no cuadra con la proforma física, así que se rechaza con 422 si el producto ya está cargado.
+     *
+     * @param  \Illuminate\Http\Request  $request  compra_id, producto_id, cantidad, costo (opcional)
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function agregarItem(Request $request)
     {
         $request->validate([
@@ -162,6 +173,15 @@ class CompraController extends Controller
         abort_if($compra->sucursal_id !== Auth::user()->sucursal_id, 403);
         abort_if($compra->estado !== 'PROFORMA', 422, 'La compra no es proforma.');
         $prod     = Producto::findOrFail($request->producto_id);
+        // Bloqueo de duplicados: el repuesto no puede repetirse en la misma compra.
+        abort_if(
+            Compradetalle::where('compra_id', $compra->id)
+                ->where('producto_id', $prod->id)
+                ->where('estado', 'VALIDO')
+                ->exists(),
+            422,
+            'El repuesto ya está cargado en esta compra.'
+        );
         $cantidad = $request->cantidad;
         $costo    = $request->filled('costo') ? (float) $request->costo : $prod->p_comp;
         $monto    = $costo * $cantidad;

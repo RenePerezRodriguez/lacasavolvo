@@ -221,7 +221,15 @@ export function CompraDetail({ compraId, compraData, onNav }) {
    * @param {object} p - Producto seleccionado en ProductSearchInput.
    */
   async function addItem(p) {
-    setError(null); setSaving(true);
+    setError(null);
+    // Compras NO admite el mismo repuesto en dos renglones (decisión clienta 25/6: notificar/bloquear).
+    // A diferencia de Ventas (que consolida cantidad a propósito), un duplicado en una compra esconde
+    // errores que recién se ven cuando el total no cuadra con la proforma física. Bloqueamos y avisamos.
+    if (detalles.some(d => String(d.producto_id) === String(p.id))) {
+      setError(`El repuesto ${p.codigo ? p.codigo + ' ' : ''}ya está cargado en esta compra. Editá la cantidad en la línea existente.`);
+      return;
+    }
+    setSaving(true);
     try { await comprasApi.agregarItem({ compra_id: compraId, producto_id: p.id, cantidad: 1 }); await Promise.all([reloadDetalles(), reloadHeader()]); }
     catch (e) { setError(e?.response?.data?.error ?? e?.response?.data?.message ?? 'Error al agregar'); }
     finally { setSaving(false); }
