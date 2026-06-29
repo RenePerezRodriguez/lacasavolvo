@@ -101,8 +101,11 @@ class EnvioController extends Controller
             'medio_id.required' => 'Selecciona un medio de transporte.',
             'medio_id.exists'   => 'El medio de transporte seleccionado no existe.',
         ]);
-        $ultimoCierre = Auth::user()->sucursal->ultimo_cierre;
-        abort_if($ultimoCierre && $request->fecha <= $ultimoCierre, 422, 'Fecha fuera de rango (caja cerrada).');
+        // Paridad con el legacy (decisión René 29/6): SIN guarda de período (caja cerrada) al
+        // crear el envío. El legacy registra envíos con CUALQUIER fecha —incluida una retroactiva—
+        // y una proforma de envío NO mueve stock ni caja. Esta guarda (agregado del rediseño)
+        // rompía el caso real reportado por Tefy: registrar un traslado con su fecha real (27/6)
+        // posterior al último cierre devolvía "Error al crear el envío".
         $envio = Envio::create([
             'sucursal_id'=>Auth::user()->sucursal_id,'fecha'=>$request->fecha,'cuenta_id'=>$request->cuenta_id,
             'medio_id'=>$request->medio_id,'monto'=>$request->monto,'pagado'=>$request->pagado??'PAGADO',
@@ -179,7 +182,7 @@ class EnvioController extends Controller
             // varchar(191): cap explícito para no reventar el UPDATE con 192+ chars (1406→500).
             'observacion' => 'nullable|string|max:191',
         ]);
-        abort_if($request->fecha <= Auth::user()->sucursal->ultimo_cierre, 422, 'Fecha fuera de rango (caja cerrada).');
+        // Paridad legacy: sin guarda de período al editar el encabezado de la proforma. René 29/6.
 
         $envio->update($request->only(['cuenta_id','fecha','medio_id','monto','pagado','observacion']));
         return response()->json(true);
@@ -240,7 +243,7 @@ class EnvioController extends Controller
             return response()->json(['error' => 'No es proforma.'], 422);
         }
         $hoy = now()->format('Y-m-d');
-        abort_if($hoy <= Auth::user()->sucursal->ultimo_cierre, 422, 'Fecha fuera de rango (caja cerrada).');
+        // Paridad legacy: sin guarda de período al despachar (la tranza del flete usa $hoy). René 29/6.
 
         $detalles = $envio->detalles()->where('estado', 'VALIDO')->get();
         if ($detalles->isEmpty()) {
@@ -304,8 +307,8 @@ class EnvioController extends Controller
             return response()->json(['error' => 'No está en tránsito.'], 422);
         }
         $hoy = now()->format('Y-m-d');
-        abort_if($hoy <= Auth::user()->sucursal->ultimo_cierre, 422, 'Fecha fuera de rango (caja cerrada).');
-        
+        // Paridad legacy: sin guarda de período al recibir (la tranza del flete usa $hoy). René 29/6.
+
         DB::beginTransaction();
         try {
             $envio->estado = 'RECIBIDO'; $envio->save();
@@ -370,9 +373,7 @@ class EnvioController extends Controller
     public function destroy(Request $request, Envio $envio)
     {
         abort_if($envio->sucursal_id !== Auth::user()->sucursal_id, 403);
-        $hoy = now()->format('Y-m-d');
-        abort_if($hoy <= Auth::user()->sucursal->ultimo_cierre, 422, 'Fecha fuera de rango (caja cerrada).');
-
+        // Paridad legacy: sin guarda de período al anular (el legacy no la tiene). René 29/6.
         DB::beginTransaction();
         try {
             if ($envio->estado === 'ENVIADO') {
@@ -424,8 +425,7 @@ class EnvioController extends Controller
         $envio   = Envio::findOrFail($request->envio_id);
         $detalle = Enviodetalle::findOrFail($request->registro);
 
-        abort_if(now()->format('Y-m-d') <= Auth::user()->sucursal->ultimo_cierre, 422, 'Fecha fuera de rango (caja cerrada).');
-
+        // Paridad legacy: sin guarda de período en la devolución de envío. René 29/6.
         if ($envio->cuenta_id !== Auth::user()->sucursal_id || $envio->estado !== 'RECIBIDO') {
             return response()->json(['ok' => false, 'lim' => false]);
         }
@@ -486,8 +486,7 @@ class EnvioController extends Controller
         $devenvio = Devenvio::findOrFail($request->registro);
         $envio    = Envio::findOrFail($devenvio->envio_id);
 
-        abort_if(now()->format('Y-m-d') <= Auth::user()->sucursal->ultimo_cierre, 422, 'Fecha fuera de rango (caja cerrada).');
-
+        // Paridad legacy: sin guarda de período al revertir la devolución de envío. René 29/6.
         if ($envio->cuenta_id !== Auth::user()->sucursal_id) {
             return response()->json(['error' => 'Sin acceso'], 403);
         }

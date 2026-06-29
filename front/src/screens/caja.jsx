@@ -10,7 +10,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import logger from '../lib/logger.js';
 import { Icon, Button, Badge, Card, Empty, PageHead, Pager, useToast } from '../lib/components.jsx';
-import { caja as cajaApi } from '../services/api.js';
+import { caja as cajaApi, apiErrorMsg } from '../services/api.js';
 import { claseLabel } from '../lib/clase.js';
 
 /** Formatea un número como bolivianos con 2 decimales para display. */
@@ -31,7 +31,7 @@ function AbrirCajaModal({ onClose, onOpened }) {
     if (!monto) return;
     setSaving(true);
     try { await cajaApi.apertura({ monto: parseFloat(monto) }); onOpened?.(); }
-    catch (e) { alert(e?.response?.data?.error || 'Error al abrir caja'); logger.error(e); }
+    catch (e) { alert(apiErrorMsg(e, 'Error al abrir caja')); logger.error(e); }
     finally { setSaving(false); }
   };
   return (
@@ -77,7 +77,7 @@ function MovimientoModal({ tipo, onClose, onSaved }) {
       if (esIng) await cajaApi.ingreso({ monto: parseFloat(monto), descripcion: desc, fecha });
       else await cajaApi.egreso({ monto: parseFloat(monto), descripcion: desc, fecha });
       onSaved?.();
-    } catch (e) { alert(e?.response?.data?.error || 'Error al registrar'); logger.error(e); }
+    } catch (e) { alert(apiErrorMsg(e, 'Error al registrar')); logger.error(e); }
     finally { setSaving(false); }
   };
   return (
@@ -260,7 +260,7 @@ export function CajaVista({ aperturaId, onNav, sucursalId, user, effectivePermis
   const handleCerrar = async () => {
     setSaving(true);
     try { await cajaApi.cierre({}); toast('Caja cerrada', 'success'); onNav('caja'); }
-    catch (e) { alert(e?.response?.data?.error || 'Error al cerrar'); logger.error(e); }
+    catch (e) { alert(apiErrorMsg(e, 'Error al cerrar')); logger.error(e); }
     finally { setSaving(false); setCerrando(false); }
   };
   const handleImprimir = async () => {
@@ -273,7 +273,7 @@ export function CajaVista({ aperturaId, onNav, sucursalId, user, effectivePermis
     if (!window.confirm(`¿Eliminar el cierre #${info.cierre_id}? Se revierte el cierre y se reabre la apertura.`)) return;
     setSaving(true);
     try { await cajaApi.revertirCierre({ cierre_id: info.cierre_id }); toast('Cierre eliminado', 'success'); onNav('caja'); }
-    catch (e) { alert(e?.response?.data?.error || 'No se pudo eliminar'); logger.error(e); }
+    catch (e) { alert(apiErrorMsg(e, 'No se pudo eliminar')); logger.error(e); }
     finally { setSaving(false); }
   };
   const guardarEdit = async (id) => {
@@ -282,14 +282,14 @@ export function CajaVista({ aperturaId, onNav, sucursalId, user, effectivePermis
     try {
       await cajaApi.updateTranza({ tranza_id: id, descripcion: editDesc, fecha: editFecha || undefined, monto: editMonto && parseFloat(editMonto) > 0 ? parseFloat(editMonto) : undefined });
       setEditId(null); loadInfo(); loadTab();
-    } catch (e) { alert(e?.response?.data?.error || 'Error al actualizar'); logger.error(e); }
+    } catch (e) { alert(apiErrorMsg(e, 'Error al actualizar')); logger.error(e); }
     finally { setSaving(false); }
   };
   const borrarTranza = async (m) => {
     if (!window.confirm(`¿Eliminar movimiento "${m.descripcion}"?`)) return;
     setSaving(true);
     try { await cajaApi.deleteTranza({ tranza_id: m.id }); loadInfo(); loadTab(); }
-    catch (e) { alert(e?.response?.data?.error || 'Error al eliminar'); logger.error(e); }
+    catch (e) { alert(apiErrorMsg(e, 'Error al eliminar')); logger.error(e); }
     finally { setSaving(false); }
   };
 

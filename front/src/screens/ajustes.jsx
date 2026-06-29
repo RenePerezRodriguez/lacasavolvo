@@ -6,7 +6,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useListData, useColumnVisibility } from '../lib/hooks.js';
 import logger from '../lib/logger.js';
 import { Icon, Button, Badge, KPI, Empty, PageHead, Pager, PageSizeSelector, ProductSearchInput, useToast } from '../lib/components.jsx';
-import { productos as prodApi } from '../services/api.js';
+import { productos as prodApi, apiErrorMsg } from '../services/api.js';
 
 /**
  * Modal para registrar un ajuste positivo o negativo de stock.
@@ -41,7 +41,7 @@ export function AjusteModal({ onClose, onSaved }) {
       logger.error(e);
       // El backend rechaza (422) un ajuste negativo que dejaría el stock por debajo de 0;
       // surfacea ese mensaje en vez de fallar en silencio (antes solo se logueaba).
-      const msg = e?.response?.data?.error || "No se pudo registrar el ajuste.";
+      const msg = apiErrorMsg(e, "No se pudo registrar el ajuste.");
       toast(msg, "error");
     }
     finally { setSaving(false); }

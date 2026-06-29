@@ -7,7 +7,7 @@ import { useListData, useColumnVisibility, filterDetalles, recalcSubtotal, previ
 import logger from '../lib/logger.js';
 import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader, RowFilterInput } from '../lib/components.jsx';
 import { CotizacionFormModal, EncabezadoModal } from './forms.jsx';
-import { openPdf, cotizaciones as cotizApi } from '../services/api.js';
+import { openPdf, cotizaciones as cotizApi, apiErrorMsg } from '../services/api.js';
 
 /**
  * Etiquetas de estado propias de cotizaciones: una cotización ES una PROFORMA (un
@@ -322,7 +322,7 @@ export function CotizacionDetail({ cotizacionId, cotizacionData, onNav }) {
       });
       setDescuentoDirty(false);
     } catch (e) {
-      setError('Error al guardar descuento: ' + (e?.response?.data?.error || e.message));
+      setError(apiErrorMsg(e, 'Error al guardar descuento'));
     }
     finally { setSaving(false); }
   }

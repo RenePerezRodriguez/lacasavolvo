@@ -37,6 +37,36 @@ http.interceptors.response.use(
   }
 );
 
+/**
+ * Extrae el mensaje de error legible de una respuesta de error de Axios.
+ *
+ * El backend Laravel devuelve la causa en distintos campos según el origen:
+ *  - `abort(4xx, 'msg')` / HttpException  → `{ message }`            (ej. "Fecha fuera de rango (caja cerrada).")
+ *  - `$request->validate()` (422)         → `{ message, errors }`    (errors: { campo: ["..."] })
+ *  - `response()->json(['error'=>'msg'])`  → `{ error }`             (algunos endpoints de envíos/caja)
+ *
+ * Históricamente el front solo leía `data.error`, así que los dos primeros formatos
+ * caían siempre al mensaje genérico y ocultaban la causa real (bug 29/6 envíos).
+ * Este helper unifica la extracción: `error` → `message` → primer `errors` → fallback.
+ *
+ * @param {*} err - Error capturado (idealmente un AxiosError).
+ * @param {string} [fallback='Ocurrió un error'] - Texto si no hay causa legible en la respuesta.
+ * @returns {string} Mensaje claro para mostrar al usuario.
+ */
+export function apiErrorMsg(err, fallback = 'Ocurrió un error') {
+  const d = err?.response?.data;
+  if (d) {
+    if (typeof d.error === 'string' && d.error.trim()) return d.error;
+    if (typeof d.message === 'string' && d.message.trim()) return d.message;
+    if (d.errors && typeof d.errors === 'object') {
+      const first = Object.values(d.errors)[0];
+      if (Array.isArray(first) && first[0]) return first[0];
+      if (typeof first === 'string' && first.trim()) return first;
+    }
+  }
+  return err?.message || fallback;
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const auth = {
   login:           (email, password) => http.post('/login', { email, password }),

@@ -8,7 +8,7 @@ import logger from '../lib/logger.js';
 import { useColumnVisibility } from '../lib/hooks.js';
 import { Icon, Button, Badge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable } from '../lib/components.jsx';
 import { SucursalFormModal, UsuarioFormModal, RolFormModal, MedioFormModal, NombreFormModal } from './forms.jsx';
-import { sucursales as sucursalesApi, users as usersApi, roles as rolesApi, marcas as marcasApi, industrias as industriasApi, medios as mediosApi, empresas as empresasApi, localidades as localidadesApi, profile as profileApi } from '../services/api.js';
+import { sucursales as sucursalesApi, users as usersApi, roles as rolesApi, marcas as marcasApi, industrias as industriasApi, medios as mediosApi, empresas as empresasApi, localidades as localidadesApi, profile as profileApi, apiErrorMsg } from '../services/api.js';
 
 const ROL_PERMISOS = {
   ADMIN:      { count: 17, areas: ["Bypass total (Gate::before)"] },
@@ -51,7 +51,7 @@ export function Sucursales({ onNav, effectivePermissions }) {
       await sucursalesApi.toggle(s.id);
       load();
     } catch (e) {
-      alert(e?.response?.data?.error || 'Error al cambiar estado');
+      alert(apiErrorMsg(e, 'Error al cambiar estado'));
       logger.error(e);
     }
   };
@@ -164,7 +164,7 @@ export function Usuarios({ onNav, effectivePermissions }) {
       }
       load();
     } catch (e) {
-      alert(e?.response?.data?.error || 'Error al cambiar estado');
+      alert(apiErrorMsg(e, 'Error al cambiar estado'));
       logger.error(e);
     }
   };
@@ -333,7 +333,7 @@ export function Roles({ onNav, user, effectivePermissions }) {
                         await usersApi.simulate(r.id);
                         alert(`✓ Simulando "${r.name}". Recarga la página para ver los cambios.`);
                         window.location.reload();
-                      } catch(e) { alert(e?.response?.data?.error || 'Error al simular'); }
+                      } catch(e) { alert(apiErrorMsg(e, 'Error al simular')); }
                     }}>Simular</Button>
                     )}
                     {canEdit && <Button variant="ghost" size="sm" icon="fa-edit" onClick={() => { setEditing(r); setFormOpen(true); }}>Editar</Button>}

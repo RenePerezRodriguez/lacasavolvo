@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Icon, Button, Card, useToast, AccountSearchInput, ComboSelect } from '../lib/components.jsx';
 import logger from '../lib/logger.js';
-import { compras as comprasApi, pedidos as pedidosApi, envios as enviosApi, cuentas as cuentasApi, cotizaciones as cotizApi, medios as mediosApi, sucursales as sucursalesApi, marcas as marcasApi, industrias as industriasApi, productos as prodApi, users as usersApi, roles as rolesApi } from '../services/api.js';
+import { compras as comprasApi, pedidos as pedidosApi, envios as enviosApi, cuentas as cuentasApi, cotizaciones as cotizApi, medios as mediosApi, sucursales as sucursalesApi, marcas as marcasApi, industrias as industriasApi, productos as prodApi, users as usersApi, roles as rolesApi, apiErrorMsg } from '../services/api.js';
 
 // Mensaje de error inline bajo un campo requerido
 function FieldErr({ msg }) {
@@ -91,7 +91,7 @@ export function CompraFormModal({ onClose, onSaved }) {
       onSaved && onSaved(res.data);
       onClose();
     } catch (err) {
-      toast(err?.response?.data?.error || 'Error al crear la compra', 'error');
+      toast(apiErrorMsg(err, 'Error al crear la compra'), 'error');
       logger.error(err);
     }
     finally { setSaving(false); }
@@ -168,7 +168,7 @@ export function PedidoFormModal({ onClose, onSaved }) {
       onSaved && onSaved(res.data);
       onClose();
     } catch (err) {
-      toast(err?.response?.data?.error || 'Error al crear el pedido', 'error');
+      toast(apiErrorMsg(err, 'Error al crear el pedido'), 'error');
       logger.error(err);
     }
     finally { setSaving(false); }
@@ -233,7 +233,7 @@ export function EnvioFormModal({ onClose, onSaved, sucursalId }) {
       onSaved && onSaved(res.data);
       onClose();
     } catch (err) {
-      toast(err?.response?.data?.error || 'Error al crear el envío', 'error');
+      toast(apiErrorMsg(err, 'Error al crear el envío'), 'error');
       logger.error(err);
     }
     finally { setSaving(false); }
@@ -339,7 +339,7 @@ export function EnvioEncabezadoModal({ envio, onClose, onSaved }) {
       onSaved && onSaved();
       onClose();
     } catch (err) {
-      toast(err?.response?.data?.error || 'Error al actualizar el encabezado', 'error');
+      toast(apiErrorMsg(err, 'Error al actualizar el encabezado'), 'error');
       logger.error(err);
     }
     finally { setSaving(false); }
@@ -413,7 +413,7 @@ export function CotizacionFormModal({ onClose, onSaved }) {
       onSaved && onSaved(res.data);
       onClose();
     } catch (err) {
-      toast(err?.response?.data?.error || 'Error al crear la cotización', 'error');
+      toast(apiErrorMsg(err, 'Error al crear la cotización'), 'error');
       logger.error(err);
     }
     finally { setSaving(false); }
@@ -752,7 +752,7 @@ export function CuentaFormModal({ onClose, onSaved, edit }) {
       onSaved && onSaved();
       onClose();
     } catch (err) {
-      toast(err?.response?.data?.error || 'Error al guardar la cuenta', 'error');
+      toast(apiErrorMsg(err, 'Error al guardar la cuenta'), 'error');
       logger.error(err);
     }
     finally { setSaving(false); }
@@ -839,7 +839,7 @@ export function SucursalFormModal({ onClose, onSaved, edit }) {
       onSaved && onSaved();
       onClose();
     } catch (err) {
-      toast(err?.response?.data?.error || 'Error al guardar la sucursal', 'error');
+      toast(apiErrorMsg(err, 'Error al guardar la sucursal'), 'error');
       logger.error(err);
     }
     finally { setSaving(false); }
@@ -980,7 +980,7 @@ export function UsuarioFormModal({ onClose, onSaved, edit }) {
     } catch (err) {
       const msg = err?.response?.data?.errors
         ? Object.values(err.response.data.errors).flat().join(' · ')
-        : (err?.response?.data?.error || 'Error al guardar el usuario');
+        : apiErrorMsg(err, 'Error al guardar el usuario');
       toast(msg, 'error');
       logger.error(err);
     }
@@ -1185,7 +1185,7 @@ export function RolFormModal({ onClose, onSaved, edit }) {
       onSaved && onSaved();
       onClose();
     } catch (err) {
-      toast(err?.response?.data?.error || 'Error al guardar el rol', 'error');
+      toast(apiErrorMsg(err, 'Error al guardar el rol'), 'error');
       logger.error(err);
     }
     finally { setSaving(false); }
@@ -1275,12 +1275,15 @@ export function MedioFormModal({ onClose, onSaved, edit, onSave }) {
     setErrors({});
     setSaving(true);
     try {
-      if (onSave) await onSave({ nombre: nameRef.current.value, estado: activeRef.current.checked ? 'ON' : 'OFF' });
+      // El input muestra el texto en mayúscula (textTransform CSS), pero `.value` conserva lo
+      // realmente tecleado. Normalizamos a MAYÚSCULA al guardar para que lo almacenado coincida
+      // con lo que se ve (antes se guardaba en minúscula y salía así en el envío). Convención legacy.
+      if (onSave) await onSave({ nombre: nameRef.current.value.trim().toUpperCase(), estado: activeRef.current.checked ? 'ON' : 'OFF' });
       toast(edit ? 'Medio actualizado' : 'Medio creado correctamente', 'success');
       onSaved && onSaved();
       onClose();
     } catch (err) {
-      toast(err?.response?.data?.error || 'Error al guardar', 'error');
+      toast(apiErrorMsg(err, 'Error al guardar'), 'error');
       logger.error(err);
     }
     finally { setSaving(false); }
@@ -1325,7 +1328,7 @@ export function NombreFormModal({ onClose, onSaved, edit, label, icon, onSave })
       onSaved && onSaved();
       onClose();
     } catch (err) {
-      toast(err?.response?.data?.error || 'Error al guardar', 'error');
+      toast(apiErrorMsg(err, 'Error al guardar'), 'error');
       logger.error(err);
     }
     finally { setSaving(false); }

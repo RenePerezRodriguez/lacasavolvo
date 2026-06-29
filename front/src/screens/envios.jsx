@@ -7,7 +7,7 @@ import { useListData, useColumnVisibility, filterDetalles } from '../lib/hooks.j
 import logger from '../lib/logger.js';
 import { Icon, Button, Badge, StatusBadge, Card, KPI, Empty, PageHead, Pager, PageSizeSelector, DataTable, PdfButton, ProductSearchInput, QtyStepper, DocHeader, RowFilterInput } from '../lib/components.jsx';
 import { EnvioFormModal, EnvioEncabezadoModal } from './forms.jsx';
-import { openPdf, envios as enviosApi } from '../services/api.js';
+import { openPdf, envios as enviosApi, apiErrorMsg } from '../services/api.js';
 
 /**
  * Listado paginado de envíos (remitos de despacho) con KPIs y búsqueda.
@@ -253,7 +253,7 @@ export function EnvioDetail({ envioId, envioData, onNav }) {
     if (!window.confirm(msg)) return;
     setSaving(true);
     try { await enviosApi.destroy(envioId); onNav('envios'); }
-    catch (err) { alert(err?.response?.data?.error || 'No se pudo anular el envío.'); }
+    catch (err) { alert(apiErrorMsg(err, 'No se pudo anular el envío.')); }
     finally { setSaving(false); }
   }
 
